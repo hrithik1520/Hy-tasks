@@ -51,6 +51,18 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk out/HyAssistant.apk
           ls -la out
 
+      - name: Verify APK (signature + 16 KB native alignment)
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --verbose out/HyAssistant.apk | head -5
+          "$BT/zipalign" -c -P 16 -v 4 out/HyAssistant.apk | tail -2
+          mkdir -p so && unzip -o -q out/HyAssistant.apk 'lib/*' -d so
+          for f in so/lib/*/*.so; do
+            align=$(readelf -lW "$f" | awk '/LOAD/ {print $NF}' | sort -u)
+            echo "$f -> $align"
+            for a in $align; do [ $((a)) -ge 16384 ] || { echo "::error::$f not 16 KB aligned"; exit 1; }; done
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: HyAssistant-${{ env.VERSION_NAME }}

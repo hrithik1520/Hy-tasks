@@ -25,7 +25,7 @@ android {
         externalNativeBuild {
             cmake {
                 // Always optimize native code — a Debug llama.cpp build is ~10x slower.
-                arguments += listOf("-DCMAKE_BUILD_TYPE=Release")
+                arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
                 cppFlags += listOf("-O3")
             }
         }
@@ -38,6 +38,10 @@ android {
                 storePassword = System.getenv("HY_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("HY_KEY_ALIAS")
                 keyPassword = System.getenv("HY_KEY_PASSWORD")
+                // Sign with every scheme so all installers / OEM builds accept the APK.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
