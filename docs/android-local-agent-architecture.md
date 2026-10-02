@@ -193,7 +193,7 @@ community license) before shipping it in the downloader.
 | Cold load | < 5 s |
 | Parse latency | < 1.5 s |
 | Reply draft (~40 tokens) | < 4 s |
-| Min device | 6 GB RAM, Android 10+ |
+| Min device | 6 GB RAM, Android 10+ (target: Nothing Phone (3a) Pro) |
 
 Lifecycle: load on demand when the user opens the assistant, keep warm for a
 short idle window, then unload. Do **not** hold the model in a background
@@ -264,10 +264,25 @@ service — the OS will kill it and it drains battery.
 
 ---
 
-## 11. Open questions
+## 11. Decisions (answered)
 
-1. Which messengers matter most for F2, and do they all expose a reply action?
-2. Target languages — English only, or Hindi/Hinglish too? (Affects model choice.)
-3. Distribution: Play Store, or sideload/F-Droid? (Affects allowed permissions.)
-4. Minimum supported device / RAM?
-5. Is voice a v1 must-have or v1.1?
+| Question | Decision | Consequence |
+|---|---|---|
+| Messengers | **WhatsApp** (+ WhatsApp Business toggle) | Only notification-based read + `RemoteInput` reply; no history access |
+| Languages | **English** | Qwen2.5 Instruct models; English-only prompts |
+| Distribution | **Both** sideload and Play Store | v1 ships as a sideload APK via GitHub Releases. Play needs a private signing key and a notification-listener policy declaration first |
+| Target device | **Nothing Phone (3a) Pro** (Dimensity 7300, 8/12 GB RAM, Android 15) | arm64-only build, `-march=armv8.2-a+dotprod+fp16`, 4 threads (A78 cores), 1.5B Q4_K_M default |
+| Voice | **Not in v1** | No STT/TTS; F5 deferred |
+
+## 12. What v1 actually implements
+
+- F1 catch-up ("What did I miss?"), with a plain no-AI fallback when no model is installed
+- Per-chat summary and suggested reply
+- F2 reply via WhatsApp's notification action, always behind a confirmation card;
+  "Copy & open WhatsApp" fallback when the notification is gone
+- Rule-based commands: catch-up / summarize X / suggest reply to X / reply to X saying Y
+- Fuzzy contact resolution with a "Which Rahul?" picker on ambiguity
+- Model manager: catalog download (DownloadManager), import from file, custom URL,
+  GGUF header check, idle unload after 5 min
+- Deferred: F3 reminders, F4 call/SMS intents, F5 voice, JSON-schema constrained output
+  (v1 only asks the model for plain text, so grammar constraints aren't needed yet)
