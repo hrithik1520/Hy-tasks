@@ -8,7 +8,6 @@ import com.hy.assistant.ReplyMode
 import com.hy.assistant.Settings
 import com.hy.assistant.core.Prompts
 import com.hy.assistant.core.SafetyFilter
-import com.hy.assistant.core.TextCleanup
 import com.hy.assistant.llm.LlamaEngine
 import com.hy.assistant.models.ModelManager
 import com.hy.assistant.notifications.Chat
@@ -82,12 +81,12 @@ class Automation(
         val sendAutomatically = wantAuto && holdReason == null
 
         val prompt = if (sendAutomatically) {
-            Prompts.autoReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone)
+            Prompts.autoReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, ReplyStyle.promptRules(chat, s))
         } else {
-            Prompts.draftReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone)
+            Prompts.draftReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, styleRules = ReplyStyle.promptRules(chat, s))
         }
         val raw = withWakeLock { llm.withLock { engine.complete(model, prompt, s.threads, s.contextSize) } }
-        val text = TextCleanup.cleanReply(raw)
+        val text = ReplyStyle.finish(raw, chat, s)
         if (text.isBlank()) return
 
         // The user may have replied themselves while we were thinking.

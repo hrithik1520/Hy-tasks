@@ -46,6 +46,11 @@ What it does:
   running any command. Start with "Agent mode", "agent: …", or just ask
   ("find today's gold price and send it to dad"). The engine reuses its cache between steps,
   so each step only processes the new part.
+- **Humanized replies** (on by default): every WhatsApp reply Hy writes follows rules from the
+  "humanizer" guide (Wikipedia's *Signs of AI writing*). It drops chatbot phrases ("Certainly!",
+  "I hope this helps"), em dashes, curly quotes and AI vocabulary, uses contractions, and matches
+  how *you* text in that chat (length, lowercase, emojis, final full stop). This is a rules pass in
+  code, so it adds no extra AI time. Toggle in Settings.
 - **Files: .md, .csv, .docx, .txt**: every answer has **Save as…**, and asking for a format saves it
   automatically ("make a CSV of my unread chats", "write a leave letter as a Word file",
   "agent: compare 3 phones and give me an excel file"). Files go to **Downloads/Hy**, with

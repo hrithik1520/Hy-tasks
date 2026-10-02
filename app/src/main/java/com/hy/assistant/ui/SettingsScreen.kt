@@ -80,6 +80,11 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                         )
                     }
                 }
+                ToggleRow(
+                    "Humanize replies",
+                    "Replies sound like you texting, not a chatbot: no \"Certainly!\" or \"I hope this helps\", no em dashes or fancy words, and matched to how you write in each chat (length, lowercase, emojis).",
+                    s.humanizeReplies,
+                ) { v -> vm.settings.update { it.copy(humanizeReplies = v) } }
                 ToggleRow("Polish my replies with AI", "\"Reply to X saying …\" gets rewritten naturally. Off = sends your exact words.", s.polishReplies) { v ->
                     vm.settings.update { it.copy(polishReplies = v) }
                 }

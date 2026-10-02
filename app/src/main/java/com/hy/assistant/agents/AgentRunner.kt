@@ -3,6 +3,7 @@ package com.hy.assistant.agents
 import android.content.Context
 import com.hy.assistant.Settings
 import com.hy.assistant.auto.ActivityLog
+import com.hy.assistant.auto.ReplyStyle
 import com.hy.assistant.core.AgentKind
 import com.hy.assistant.core.AgentStepRecord
 import com.hy.assistant.core.CommandSafety
@@ -209,12 +210,18 @@ class AgentRunner(
             } ?: (notFound(op.contact) to StepStatus.FAILED)
             is MessagesOp.Draft -> findChat(op.contact, chats)?.let { c ->
                 val s = settings.current
-                val draft = TextCleanup.cleanReply(
-                    complete(Prompts.draftReply(c.name, c.messages.map { it.toChatLine() }, s.userName, s.tone, memory = MemoryStore.promptBlock(400))),
+                val draft = ReplyStyle.finish(
+                    complete(
+                        Prompts.draftReply(
+                            c.name, c.messages.map { it.toChatLine() }, s.userName, s.tone,
+                            memory = MemoryStore.promptBlock(400), styleRules = ReplyStyle.promptRules(c, s),
+                        ),
+                    ),
+                    c, s,
                 )
                 sendWithApproval(c, draft)
             } ?: (notFound(op.contact) to StepStatus.FAILED)
-            is MessagesOp.Send -> findChat(op.contact, chats)?.let { c -> sendWithApproval(c, TextCleanup.cleanReply(op.text)) }
+            is MessagesOp.Send -> findChat(op.contact, chats)?.let { c -> sendWithApproval(c, ReplyStyle.finish(op.text, c, settings.current)) }
                 ?: (notFound(op.contact) to StepStatus.FAILED)
         }
     }

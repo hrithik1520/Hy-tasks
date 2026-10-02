@@ -44,6 +44,8 @@ data class SettingsData(
     /** Most steps a multi-step agent run may take before it must answer. */
     val agentMaxSteps: Int = 10,
     val searchEngine: SearchEngine = SearchEngine.BING,
+    /** Make WhatsApp replies read like a person texting (humanizer rules + voice matching). */
+    val humanizeReplies: Boolean = true,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -85,6 +87,7 @@ class Settings(context: Context) {
             terminalBackend = runCatching { TerminalBackend.valueOf(prefs.getString("terminalBackend", d.terminalBackend.name)!!) }
                 .getOrDefault(d.terminalBackend),
             agentMaxSteps = prefs.getInt("agentMaxSteps", d.agentMaxSteps),
+            humanizeReplies = prefs.getBoolean("humanizeReplies", d.humanizeReplies),
             searchEngine = runCatching { SearchEngine.valueOf(prefs.getString("searchEngine", d.searchEngine.name)!!) }.getOrDefault(d.searchEngine),
         )
     }
@@ -112,6 +115,7 @@ class Settings(context: Context) {
             .putString("terminalBackend", d.terminalBackend.name)
             .putInt("agentMaxSteps", d.agentMaxSteps)
             .putString("searchEngine", d.searchEngine.name)
+            .putBoolean("humanizeReplies", d.humanizeReplies)
             .apply()
         _data.value = d
     }

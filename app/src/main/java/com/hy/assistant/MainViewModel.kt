@@ -25,6 +25,7 @@ import com.hy.assistant.core.NotificationClassifier.Category
 import com.hy.assistant.core.TextCleanup
 import com.hy.assistant.auto.ActivityLog
 import com.hy.assistant.auto.HyNotifications
+import com.hy.assistant.auto.ReplyStyle
 import com.hy.assistant.notifications.FeedItem
 import com.hy.assistant.notifications.NotificationFeed
 import com.hy.assistant.notifications.Chat
@@ -411,7 +412,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             is AgentAction.Reply -> withChat(action.contact, notFound(action.contact)) { chat ->
                 _output.value = null
                 // The model already wrote the final text; the confirmation card still applies.
-                _proposal.value = ReplyProposal(chat.key, chat.name, chat.packageName, TextCleanup.cleanReply(action.message), false, chat.canReply)
+                _proposal.value = ReplyProposal(chat.key, chat.name, chat.packageName, ReplyStyle.finish(action.message, chat, settings.current), false, chat.canReply)
             }
             is AgentAction.SetMode -> {
                 _output.value = null
@@ -666,7 +667,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         job?.cancel()
         _proposal.value = base.copy(text = "", generating = true)
-        val prompt = Prompts.draftReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, gist, memory = memory())
+        val prompt = Prompts.draftReply(
+            chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, gist,
+            memory = memory(), styleRules = ReplyStyle.promptRules(chat, s),
+        )
         job = viewModelScope.launch {
             val sb = StringBuilder()
             try {
@@ -674,7 +678,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sb.append(chunk)
                     _proposal.value = _proposal.value?.copy(text = sb.toString().trimStart())
                 }
-                val cleaned = TextCleanup.cleanReply(sb.toString()).ifBlank { gist.orEmpty() }
+                val cleaned = ReplyStyle.finish(sb.toString(), chat, s).ifBlank { gist.orEmpty() }
                 _proposal.value = _proposal.value?.copy(text = cleaned, generating = false)
             } catch (e: CancellationException) {
                 throw e
