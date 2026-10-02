@@ -154,9 +154,9 @@ fun ChatScreen(vm: MainViewModel, chatKey: String, snackbar: SnackbarHostState, 
                     IconButton(onClick = ask) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Ask") }
                 }
                 Row {
-                    FilledTonalButton(onClick = { vm.summarize(chatKey) }) { Text("Summarize") }
+                    FilledTonalButton(onClick = { vm.endTurn(); vm.summarize(chatKey) }) { Text("Summarize") }
                     Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(onClick = { vm.draftReply(chatKey, null) }) { Text("Suggest reply") }
+                    FilledTonalButton(onClick = { vm.endTurn(); vm.draftReply(chatKey, null) }) { Text("Suggest reply") }
                     Spacer(Modifier.width(8.dp))
                     OutlinedButton(onClick = { vm.editOwnReply(chatKey) }) { Text("Write") }
                 }

@@ -6,7 +6,13 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import com.hy.assistant.core.Web
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
@@ -82,6 +88,10 @@ fun HomeScreen(
     val proposal by vm.proposal.collectAsState()
     val disambiguation by vm.disambiguation.collectAsState()
     var command by rememberSaveable { mutableStateOf("") }
+    val turns by vm.turns.collectAsState()
+    val pendingRequest by vm.pendingRequest.collectAsState()
+    val threaded by vm.threadedOutput.collectAsState()
+    var showAllTurns by rememberSaveable { mutableStateOf(false) }
     var showAllFeed by rememberSaveable { mutableStateOf(false) }
     var askedNotify by rememberSaveable { mutableStateOf(false) }
 
@@ -208,13 +218,55 @@ fun HomeScreen(
                 }
             }
 
+            // ---- Conversation with Hy ---------------------------------------------------
+            if (turns.isNotEmpty() || pendingRequest != null) {
+                item {
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Conversation", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                        TextButton(onClick = vm::newChat) { Text("New chat") }
+                    }
+                }
+                val hidden = if (showAllTurns) 0 else (turns.size - 6).coerceAtLeast(0)
+                if (hidden > 0) {
+                    item { TextButton(onClick = { showAllTurns = true }) { Text("Show $hidden earlier") } }
+                }
+                turns.drop(hidden).forEachIndexed { i, t ->
+                    val isLast = hidden + i == turns.lastIndex
+                    item(key = "turn-${t.timestamp}-$i") {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Bubble(t.user, fromUser = true)
+                            Bubble(t.assistant, fromUser = false)
+                            // Sources of the latest web answer stay tappable.
+                            val links = if (isLast && threaded != null && threaded === output) output?.links.orEmpty() else emptyList()
+                            links.forEach { link ->
+                                Text(
+                                    "• ${link.title} — ${Web.host(link.url)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    modifier = Modifier.clickable { vm.openInBrowser(link.url) }.padding(start = 8.dp, top = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+                pendingRequest?.let { req -> item { Bubble(req, fromUser = true) } }
+            }
+
+            disambiguation?.let { d -> item { DisambiguationCard(d, vm::chooseCandidate, vm::dismissDisambiguation) } }
+            proposal?.let { p ->
+                item { ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal) }
+            }
+            // A finished answer already appears in the conversation; only show the card while working.
+            output?.takeIf { it !== threaded }?.let { o -> item { OutputCard(o, vm::dismissOutput, onOpenLink = vm::openInBrowser) } }
+
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = command,
                         onValueChange = { command = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("Ask or tell Hy anything…") },
+                        placeholder = { Text(if (turns.isEmpty()) "Ask or tell Hy anything…" else "Ask a follow-up…") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { submit() }),
@@ -224,7 +276,7 @@ fun HomeScreen(
             }
             item {
                 Row(Modifier.horizontalScroll(rememberScrollState())) {
-                    FilledTonalButton(onClick = vm::digest) { Text("What did I miss?") }
+                    FilledTonalButton(onClick = { vm.runCommand("What did I miss?") }) { Text("What did I miss?") }
                     Spacer(Modifier.width(8.dp))
                     FilledTonalButton(onClick = openBrowser) { Text("Browser") }
                     Spacer(Modifier.width(8.dp))
@@ -233,12 +285,6 @@ fun HomeScreen(
                     FilledTonalButton(onClick = openModels) { Text("Models") }
                 }
             }
-
-            disambiguation?.let { d -> item { DisambiguationCard(d, vm::chooseCandidate, vm::dismissDisambiguation) } }
-            proposal?.let { p ->
-                item { ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal) }
-            }
-            output?.let { o -> item { OutputCard(o, vm::dismissOutput, onOpenLink = vm::openInBrowser) } }
 
             // ---- What Hy did on its own ----------------------------------------------
             if (activity.isNotEmpty()) {
@@ -287,6 +333,25 @@ fun HomeScreen(
                 }
             }
             item { Spacer(Modifier.padding(8.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun Bubble(text: String, fromUser: Boolean) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start) {
+        SelectionContainer {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .widthIn(max = 320.dp)
+                    .background(
+                        if (fromUser) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(14.dp),
+                    )
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            )
         }
     }
 }

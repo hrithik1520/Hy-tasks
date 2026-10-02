@@ -18,7 +18,8 @@ data class SettingsData(
     val userName: String = "",
     val tone: Tone = Tone.CASUAL,
     val threads: Int = 4,
-    val contextSize: Int = 2048,
+    /** 4096 leaves room for conversation history + memory; ~120 MB extra RAM, fine on 8 GB phones. */
+    val contextSize: Int = 4096,
     val includeBusiness: Boolean = true,
     val polishReplies: Boolean = true,
     val activeModel: String? = null,
@@ -56,7 +57,14 @@ class Settings(context: Context) {
             tone = runCatching { Tone.valueOf(prefs.getString("tone", d.tone.name)!!) }.getOrDefault(d.tone),
             // Dimensity 7300: 4 big A78 cores + 4 little A55 cores; 4 threads keeps work on the big cores.
             threads = prefs.getInt("threads", d.threads),
-            contextSize = prefs.getInt("contextSize", d.contextSize),
+            contextSize = prefs.getInt("contextSize", d.contextSize).let { stored ->
+                // One-time bump of the old 2048 default (v0.1.6 added conversation memory).
+                if (!prefs.getBoolean("ctxMigrated", false)) {
+                    val bumped = if (stored == 2048) 4096 else stored
+                    prefs.edit().putBoolean("ctxMigrated", true).putInt("contextSize", bumped).apply()
+                    bumped
+                } else stored
+            },
             includeBusiness = prefs.getBoolean("includeBusiness", d.includeBusiness),
             polishReplies = prefs.getBoolean("polishReplies", d.polishReplies),
             activeModel = prefs.getString("activeModel", null),

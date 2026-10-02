@@ -33,13 +33,16 @@ import androidx.compose.ui.unit.dp
 import com.hy.assistant.MainViewModel
 import com.hy.assistant.core.Tone
 import com.hy.assistant.auto.ActivityLog
+import com.hy.assistant.memory.MemoryStore
 import com.hy.assistant.notifications.MessageStore
+import androidx.compose.material3.TextButton
 import com.hy.assistant.notifications.NotificationFeed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () -> Unit) {
     val s by vm.settings.data.collectAsState()
+    val facts by vm.memoryFacts.collectAsState()
 
     Scaffold(
         topBar = {
@@ -122,6 +125,30 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+
+            SectionCard {
+                Text("Memory", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Tell Hy \"remember that …\" on the home screen. Used in answers and in reply drafts you review — " +
+                        "never in Auto replies. Passwords, PINs and codes are refused. Stored only on this phone.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (facts.isEmpty()) {
+                    Text("Nothing remembered yet.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
+                }
+                facts.sortedByDescending { it.createdAt }.forEach { f ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("• ${f.text}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { MemoryStore.remove(f.id) }) { Text("Delete") }
+                    }
+                }
+                Spacer(Modifier.padding(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { MemoryStore.clear() }, enabled = facts.isNotEmpty()) { Text("Forget everything") }
+                    OutlinedButton(onClick = { vm.newChat() }) { Text("Clear conversation") }
+                }
             }
 
             SectionCard {

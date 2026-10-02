@@ -14,6 +14,20 @@ sealed interface Command {
     /** "reply to Rahul saying I'm late" — the user gives the gist; the LLM may polish it. */
     data class Reply(val contact: String, val gist: String) : Command
 
+    /** "remember that my boss is Priya" */
+    data class Remember(val fact: String) : Command
+
+    /** "forget my boss" */
+    data class Forget(val query: String) : Command
+
+    data object ForgetAll : Command
+
+    /** "what do you remember" */
+    data object ListMemory : Command
+
+    /** "new chat", "start over" */
+    data object NewChat : Command
+
     data class Unknown(val text: String) : Command
 }
 
@@ -31,6 +45,14 @@ object CommandParser {
         """^(?:summari[sz]e|sum up|catch me up on|what did|what's new (?:from|with)|whats new (?:from|with))(?: my)?(?: chat with| messages from| chat)? (.+?)(?: say| said| send| sent)?\??$""",
     )
 
+    private val remember = Regex("""^(?:please )?(?:remember|memori[sz]e|note down|keep in mind)(?: that)?[:,]?\s+(.+)$""")
+    private val forgetAll = Regex("""^forget (?:everything|all(?: memories| facts)?|all you know)$""")
+    private val forget = Regex("""^(?:please )?forget(?: that| about)?\s+(.+)$""")
+    private val listMemory = Regex(
+        """^(?:what do you (?:remember|know)(?: about me)?|what have you (?:remembered|memori[sz]ed)|show (?:my )?memor(?:y|ies)|list (?:my )?memor(?:y|ies))\??$""",
+    )
+    private val newChat = Regex("""^(?:new chat|new conversation|start over|clear (?:the )?chat|reset (?:the )?chat)$""")
+
     private val replyVerb = Regex("""^(?:reply|respond|text|message|tell|send)(?: (?:to|back to))? (.+)$""")
 
     /**
@@ -45,6 +67,13 @@ object CommandParser {
         val original = text.trimEnd('.', '!')
 
         if (digest.matches(lower)) return Command.Digest
+        if (newChat.matches(lower)) return Command.NewChat
+        if (listMemory.matches(lower)) return Command.ListMemory
+        if (forgetAll.matches(lower)) return Command.ForgetAll
+        remember.matchEntire(lower)?.let { m ->
+            return Command.Remember(original.substring(lower.length - m.groupValues[1].length).trim())
+        }
+        forget.matchEntire(lower)?.let { m -> return Command.Forget(m.groupValues[1].trim()) }
 
         draft.matchEntire(lower)?.let { m ->
             return Command.DraftReply(cleanContact(m.groupValues[1]))

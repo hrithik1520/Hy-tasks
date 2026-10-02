@@ -6,6 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.hy.assistant.core.Agent
 import com.hy.assistant.core.AgentAction
 import com.hy.assistant.core.Command
+import com.hy.assistant.core.Conversation
+import com.hy.assistant.core.Memory
+import com.hy.assistant.core.MemoryFact
+import com.hy.assistant.core.Turn
+import com.hy.assistant.memory.ConversationStore
+import com.hy.assistant.memory.MemoryStore
 import com.hy.assistant.core.CommandParser
 import com.hy.assistant.core.ContactMatcher
 import com.hy.assistant.core.Prompt
@@ -122,6 +128,91 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var job: Job? = null
 
+    // ---- Conversation & memory ---------------------------------------------------------
+
+    val turns: StateFlow<List<Turn>> = ConversationStore.turns
+    val memoryFacts: StateFlow<List<MemoryFact>> = MemoryStore.facts
+
+    /** The typed request whose answer is still being produced (becomes a conversation turn). */
+    private val _pendingRequest = MutableStateFlow<String?>(null)
+    val pendingRequest: StateFlow<String?> = _pendingRequest.asStateFlow()
+    private var pendingTurn: String?
+        get() = _pendingRequest.value
+        set(v) {
+            _pendingRequest.value = v
+        }
+
+    /** The finished output that is already shown as the last conversation turn (not repeated as a card). */
+    private val _threadedOutput = MutableStateFlow<AssistantOutput?>(null)
+    val threadedOutput: StateFlow<AssistantOutput?> = _threadedOutput.asStateFlow()
+
+    init {
+        // A request becomes a turn once its answer (or reply draft) is final.
+        viewModelScope.launch {
+            _output.collect { o ->
+                if (o != null && !o.running && pendingTurn != null) {
+                    finishTurn(o.error?.let { e -> listOf(o.text, "($e)").filter { it.isNotBlank() }.joinToString("\n") } ?: o.text)
+                    _threadedOutput.value = o
+                }
+            }
+        }
+        viewModelScope.launch {
+            _proposal.collect { p ->
+                if (p != null && !p.generating) finishTurn("Drafted a reply to ${p.chatName}: \"${p.text}\" (shown for you to send)")
+            }
+        }
+    }
+
+    private fun finishTurn(answer: String) {
+        val user = pendingTurn ?: return
+        pendingTurn = null
+        if (answer.isNotBlank()) ConversationStore.add(user, answer)
+    }
+
+    /** Actions started outside the home conversation (chat screen, browser) aren't turns. */
+    fun endTurn() {
+        pendingTurn = null
+    }
+
+    fun newChat() {
+        job?.cancel()
+        pendingTurn = null
+        ConversationStore.clear()
+        _output.value = null
+    }
+
+    private val big get() = settings.current.contextSize >= 4096
+    private fun history(maxChars: Int) = Conversation.historyBlock(ConversationStore.turns.value, maxChars)
+    private fun memory() = MemoryStore.promptBlock(if (big) 800 else 400)
+
+    private fun handleMemory(cmd: Command): Boolean {
+        val text = when (cmd) {
+            is Command.Remember -> rememberText(cmd.fact)
+            is Command.Forget -> {
+                val gone = MemoryStore.forget(cmd.query)
+                if (gone.isEmpty()) "I couldn't find anything about \"${cmd.query}\" in my memory."
+                else "Forgotten:\n" + gone.joinToString("\n") { "• ${it.text}" }
+            }
+            Command.ForgetAll -> {
+                MemoryStore.clear()
+                "Done — I've forgotten everything you told me to remember."
+            }
+            Command.ListMemory -> {
+                val facts = MemoryStore.facts.value
+                if (facts.isEmpty()) "I don't have anything saved yet. Say \"remember that …\" to teach me."
+                else "Here's what I remember:\n" + facts.sortedByDescending { it.createdAt }.joinToString("\n") { "• ${it.text}" }
+            }
+            else -> return false
+        }
+        _output.value = AssistantOutput("Memory", text, running = false)
+        return true
+    }
+
+    private fun rememberText(fact: String): String = when (val r = MemoryStore.add(fact)) {
+        is Memory.AddResult.Added -> "Got it — I'll remember: ${r.fact}"
+        is Memory.AddResult.Rejected -> r.reason
+    }
+
     fun refreshStatus() {
         _listenerEnabled.value = WhatsAppListenerService.isEnabled(app)
         _canNotify.value = HyNotifications.canPost(app)
@@ -137,17 +228,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun runCommand(input: String) {
         val text = input.trim()
         if (text.isEmpty()) return
+        job?.cancel()
+        val parsed = CommandParser.parse(text, chats.value.map { it.name })
+        if (parsed == Command.NewChat) return newChat()
+        pendingTurn = text
+        if (handleMemory(parsed)) return
         val names = chats.value.map { it.name }
         val hasModel = models.activeModelFile() != null
         // If a rule matched but the name isn't a known chat, the rule probably misfired
         // ("summarize the news") — let the AI handle the whole request instead.
         val fallback: () -> Unit = { if (hasModel) runAgent(text) else showNotFoundOrHelp(text) }
-        when (val cmd = CommandParser.parse(text, names)) {
+        when (val cmd = parsed) {
             Command.Digest -> digest()
             is Command.Summarize -> withChat(cmd.contact, fallback) { summarize(it.key) }
             is Command.DraftReply -> withChat(cmd.contact, fallback) { draftReply(it.key, null) }
             is Command.Reply -> withChat(cmd.contact, fallback) { draftReply(it.key, cmd.gist) }
             is Command.Unknown -> if (hasModel) runAgent(text) else showNotFoundOrHelp(text)
+            else -> Unit
         }
     }
 
@@ -167,7 +264,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         job = viewModelScope.launch {
             val action = try {
                 val raw = StringBuilder()
-                stream(Agent.routePrompt(request, names)) { raw.append(it) }
+                stream(Agent.routePrompt(request, names, history(600))) { raw.append(it) }
                 Agent.parse(raw.toString()) ?: AgentAction.Answer
             } catch (e: CancellationException) {
                 throw e
@@ -184,13 +281,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             is AgentAction.Search -> launchTask("Searching…") { searchAndAnswer(request, action.query) }
             is AgentAction.Browse -> {
                 _output.value = null
-                openInBrowser(Web.browseUrl(action.target))
+                val url = Web.browseUrl(action.target)
+                finishTurn("Opened $url in the browser.")
+                openInBrowser(url)
             }
             is AgentAction.RunCommand -> {
                 _output.value = null
+                finishTurn("Suggested the terminal command: ${action.command} (waiting for you to tap Run)")
                 Terminal.propose(action.command)
                 _route.value = "terminal"
             }
+            is AgentAction.Remember -> _output.value = AssistantOutput("Memory", rememberText(action.fact), running = false)
             AgentAction.Digest -> digest()
             is AgentAction.Summarize -> withChat(action.contact, notFound(action.contact)) { summarize(it.key) }
             is AgentAction.DraftReply -> withChat(action.contact, notFound(action.contact)) { draftReply(it.key, null) }
@@ -202,12 +303,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             is AgentAction.SetMode -> {
                 _output.value = null
                 setReplyMode(if (action.auto) ReplyMode.AUTO else ReplyMode.MANUAL)
+                finishTurn(if (action.auto) "Switched to Auto mode." else "Switched to Manual mode.")
             }
             is AgentAction.SetChatMode -> withChat(action.contact, notFound(action.contact)) { chat ->
                 val mode = ChatMode.valueOf(action.mode.uppercase())
                 setChatMode(chat.key, mode)
                 _output.value = null
                 _messages.tryEmit("${chat.name}: ${mode.label}")
+                finishTurn("Set ${chat.name} to ${mode.label}.")
             }
         }
     }
@@ -249,6 +352,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Free-form question about one chat ("did she confirm the time?", "list what he asked for"). */
     fun askAboutChat(chatKey: String, question: String) {
+        endTurn()
         val chat = MessageStore.chat(chatKey) ?: return
         if (question.isBlank()) return
         if (models.activeModelFile() == null) {
@@ -383,7 +487,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Answers from local context; if the model says it needs facts, does a quick web search. */
     private suspend fun answerWithSearchFallback(title: String, request: String, context: String) {
         val allow = settings.current.webSearch
-        val text = streamToOutput(title, Agent.answerPrompt(request, context, settings.current.userName, allowSearch = allow))
+        val text = streamToOutput(title, Agent.answerPrompt(
+                request, context, settings.current.userName, allowSearch = allow,
+                history = history(if (big) 1500 else 600), memory = memory(),
+            ))
         val query = if (allow) Agent.searchRequest(text) else null
         if (query != null) searchAndAnswer(request, query) else _output.value = AssistantOutput(title, text, running = false)
     }
@@ -402,12 +509,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val links = outcome.results.take(3)
         _output.value = AssistantOutput(title, "Reading results…", running = true, links = links)
-        val answer = streamToOutput(title, Agent.searchAnswerPrompt(request, query, Web.formatResults(outcome.results, outcome.topText)), links)
+        val answer = streamToOutput(title, Agent.searchAnswerPrompt(request, query, Web.formatResults(outcome.results, outcome.topText), history(if (big) 800 else 300)), links)
         _output.value = AssistantOutput(title, answer.removePrefix(Agent.SEARCH_PREFIX).trim(), running = false, links = links)
     }
 
     /** Question about the page open in the in-app browser. */
     fun askAboutPage(question: String, url: String, pageText: String) {
+        endTurn()
         if (models.activeModelFile() == null) {
             _output.value = AssistantOutput("This page", "", false, error = NO_MODEL)
             return
@@ -422,6 +530,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun dismissOutput() {
+        pendingTurn = null
         job?.cancel()
         _output.value = null
     }
@@ -444,7 +553,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         job?.cancel()
         _proposal.value = base.copy(text = "", generating = true)
-        val prompt = Prompts.draftReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, gist)
+        val prompt = Prompts.draftReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, gist, memory = memory())
         job = viewModelScope.launch {
             val sb = StringBuilder()
             try {
@@ -465,6 +574,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Opens an empty reply box for the user to type their own message (no AI). */
     fun editOwnReply(chatKey: String) {
+        endTurn()
         val chat = MessageStore.chat(chatKey) ?: return
         job?.cancel()
         _proposal.value = ReplyProposal(chat.key, chat.name, chat.packageName, "", generating = false, canSend = chat.canReply)
@@ -475,6 +585,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun dismissProposal() {
+        pendingTurn = null
         job?.cancel()
         _proposal.value = null
     }

@@ -5,6 +5,8 @@ import com.hy.assistant.auto.ActivityLog
 import com.hy.assistant.auto.Automation
 import com.hy.assistant.auto.HyNotifications
 import com.hy.assistant.llm.LlamaEngine
+import com.hy.assistant.memory.ConversationStore
+import com.hy.assistant.memory.MemoryStore
 import com.hy.assistant.models.ModelManager
 import com.hy.assistant.notifications.MessageStore
 import com.hy.assistant.notifications.NotificationFeed
@@ -30,6 +32,8 @@ class HyApp : Application() {
         MessageStore.init(this, appScope)
         NotificationFeed.init(this, appScope)
         ActivityLog.init(this)
+        MemoryStore.init(this)
+        ConversationStore.init(this)
         HyNotifications.createChannels(this)
         models = ModelManager(this, settings, appScope)
         engine = LlamaEngine(appScope)

@@ -29,6 +29,12 @@ What it does:
   `echo "allow-external-apps = true" >> ~/.termux/termux.properties`, restart Termux,
   then tap *Allow Termux access* in Hy's Terminal.
 - Incoming messages never trigger web searches or commands.
+- **Conversation memory**: the home screen is a running conversation, so follow-ups work
+  ("summarize Rahul" → "reply to him saying ok", "weather today?" → "and tomorrow?").
+  **New chat** starts fresh.
+- **Long-term memory**: "remember that my boss is Priya", "what do you remember?",
+  "forget my boss". Used in answers and in reply drafts you review, never in Auto replies.
+  Passwords, PINs and codes are refused. View or delete everything in Settings → Memory.
 - **Two reply modes** (switch on the home screen, or per chat):
   - **Manual**: every new message gets a drafted reply in a notification. Tap **Send**
     right from the notification shade, or **Reply** to type your own.

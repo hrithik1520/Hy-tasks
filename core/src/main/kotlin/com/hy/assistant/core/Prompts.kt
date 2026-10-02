@@ -54,6 +54,7 @@ object Prompts {
         userName: String,
         tone: Tone,
         gist: String? = null,
+        memory: String = "",
     ): Prompt {
         val me = userName.ifBlank { "the user" }
         val task = if (gist.isNullOrBlank()) {
@@ -64,7 +65,8 @@ object Prompts {
         return Prompt(
             system = "You draft WhatsApp replies on behalf of $me. Tone: ${tone.description}. $DATA_RULE " +
                 "Reply in English, at most 2 sentences. Output only the message text — no quotes, no name, no explanation.",
-            user = "Chat: $chatName\n<messages>\n${transcript(lines)}\n</messages>\n$task",
+            user = (if (memory.isBlank()) "" else "Facts about $me (use only if relevant; never share private details):\n$memory\n\n") +
+                "Chat: $chatName\n<messages>\n${transcript(lines)}\n</messages>\n$task",
             maxTokens = 80,
             temperature = 0.7f,
         )
