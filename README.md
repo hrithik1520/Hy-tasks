@@ -147,5 +147,8 @@ scripts/fetch-llama.sh            # clones the pinned llama.cpp (llama-version.t
 
 Core tests without the Android SDK: `HY_CORE_ONLY=1 ./gradlew :core:test`.
 
+Versions: the release version lives in `version.txt` (currently 1.0.0). Bump it for a new
+release; pushes without a bump are published as `<version>.<build>`.
+
 Signing: see [`signing/README.md`](signing/README.md). The sideload key is committed for
 convenience and must be replaced before any public/Play Store release.

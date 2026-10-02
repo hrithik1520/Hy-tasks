@@ -16,7 +16,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = (System.getenv("HY_VERSION_CODE") ?: "1").toInt()
-        versionName = System.getenv("HY_VERSION_NAME") ?: "0.1.0-dev"
+        versionName = System.getenv("HY_VERSION_NAME") ?: "1.0.0-dev"
 
         ndk {
             // Nothing Phone (3a) Pro and virtually all current phones are arm64.

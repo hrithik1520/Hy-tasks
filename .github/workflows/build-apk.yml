@@ -17,10 +17,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      VERSION_NAME: 0.1.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
+
+      # version.txt holds the release version (e.g. 1.0.0). If that release already exists,
+      # the build is labelled <version>.<run number> so it never overwrites a published one.
+      - name: Version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASE=$(tr -d '[:space:]' < version.txt)
+          if gh release view "v$BASE" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            V="$BASE.${{ github.run_number }}"
+          else
+            V="$BASE"
+          fi
+          echo "VERSION_NAME=$V" >> "$GITHUB_ENV"
+          echo "Version: $V"
 
       - uses: actions/setup-java@v4
         with:
