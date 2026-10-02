@@ -47,6 +47,13 @@ class WebTest {
     }
 
     @Test
+    fun cleansGoogleSnippet() {
+        val raw = "Canberra - Wikipedia\nWikipedia\nen.wikipedia.org › wiki › Canberra\nCanberra is the capital city of Australia.\nwww.example.com/x"
+        assertEquals("Wikipedia Canberra is the capital city of Australia.", Web.cleanGoogleSnippet("Canberra - Wikipedia", raw))
+        assertTrue(Web.googleSearchUrl("a b").endsWith("q=a+b"))
+    }
+
+    @Test
     fun parsesWikipedia() {
         val json = """{"query":{"search":[{"ns":0,"title":"Taj Mahal","pageid":1,"snippet":"The <span class=\"searchmatch\">Taj</span> is in Agra \u2014 India"}]}}"""
         val r = Web.parseWikipedia(json)

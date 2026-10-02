@@ -28,6 +28,7 @@ import com.hy.assistant.tools.FileSaver
 import com.hy.assistant.tools.SavedFile
 import com.hy.assistant.tools.Terminal
 import com.hy.assistant.tools.TerminalBackend
+import com.hy.assistant.tools.SearchService
 import com.hy.assistant.tools.WebSearch
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -172,11 +173,11 @@ class AgentRunner(
 
     private suspend fun research(task: String): Pair<String, StepStatus> {
         if (!settings.current.webSearch) return "Web search is turned off in Settings." to StepStatus.FAILED
-        val outcome = withContext(Dispatchers.IO) { WebSearch.search(task) }
+        val outcome = SearchService.search(context, task, settings.current.searchEngine)
         if (outcome.results.isEmpty()) return "No web results (offline or blocked)." to StepStatus.FAILED
         _run.update { r -> r?.copy(links = (r.links + outcome.results.take(2)).distinctBy { it.url }.take(6)) }
         val facts = complete(Specialists.extractPrompt(task, "web search", Web.formatResults(outcome.results, outcome.topText)))
-        val sources = outcome.results.take(2).joinToString(", ") { Web.host(it.url) }
+        val sources = outcome.source + ": " + outcome.results.take(2).joinToString(", ") { Web.host(it.url) }
         return "${facts.trim()}\n(sources: $sources)" to StepStatus.DONE
     }
 

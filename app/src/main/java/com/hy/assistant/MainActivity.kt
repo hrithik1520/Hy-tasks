@@ -18,7 +18,26 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import android.view.ViewGroup
+import android.webkit.WebView
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.hy.assistant.notifications.MessageStore
+import com.hy.assistant.tools.GoogleWebSearcher
 import com.hy.assistant.ui.BrowserScreen
 import com.hy.assistant.ui.ChatScreen
 import com.hy.assistant.ui.TerminalScreen
@@ -78,6 +97,10 @@ private fun App(vm: MainViewModel) {
     BackHandler(enabled = route != "home" && route != "browser") { route = "home" }
     val back = { route = "home" }
 
+    // Google asked "I'm not a robot": show its page so the user can solve it.
+    val challenge by GoogleWebSearcher.challenge.collectAsState()
+    challenge?.let { wv -> CaptchaDialog(wv) }
+
     when {
         route == "models" -> ModelsScreen(vm, snackbar, back)
         route == "settings" -> SettingsScreen(vm, snackbar, back)
@@ -97,5 +120,30 @@ private fun App(vm: MainViewModel) {
             openBrowser = { route = "browser" },
             openTerminal = { route = "terminal" },
         )
+    }
+}
+
+@Composable
+private fun CaptchaDialog(webView: WebView) {
+    Dialog(
+        onDismissRequest = GoogleWebSearcher::giveUp,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+    ) {
+        Surface(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.85f)) {
+            Column(Modifier.padding(12.dp)) {
+                Text("Google check", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Google wants to make sure you're human. Solve it below — Hy continues automatically once it's done.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                AndroidView(
+                    factory = { (webView.parent as? ViewGroup)?.removeView(webView); webView },
+                    modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp),
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = GoogleWebSearcher::giveUp) { Text("Use Bing instead") }
+                }
+            }
+        }
     }
 }

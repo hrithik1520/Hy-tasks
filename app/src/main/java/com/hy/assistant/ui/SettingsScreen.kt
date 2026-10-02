@@ -34,6 +34,7 @@ import com.hy.assistant.MainViewModel
 import com.hy.assistant.core.Tone
 import com.hy.assistant.auto.ActivityLog
 import com.hy.assistant.memory.MemoryStore
+import com.hy.assistant.tools.SearchEngine
 import com.hy.assistant.notifications.MessageStore
 import androidx.compose.material3.TextButton
 import com.hy.assistant.notifications.NotificationFeed
@@ -158,6 +159,20 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     "Let Hy look up facts it doesn't know (Bing / DuckDuckGo / Wikipedia). Only the search words leave the phone — never your messages.",
                     s.webSearch,
                 ) { v -> vm.settings.update { it.copy(webSearch = v) } }
+                Text("Search engine", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SearchEngine.entries.forEach { e ->
+                        FilterChip(selected = s.searchEngine == e, onClick = { vm.settings.update { it.copy(searchEngine = e) } }, label = { Text(e.label) })
+                    }
+                }
+                Text(
+                    if (s.searchEngine == SearchEngine.GOOGLE) {
+                        "Reads Google's results page in a hidden browser. If Google asks \"I'm not a robot\", a popup lets you solve it. " +
+                            "Falls back to Bing if it fails. Google's terms don't allow automated searches — keep it to personal, light use."
+                    } else "Free, no key needed. Falls back to DuckDuckGo, then Wikipedia.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.padding(4.dp))
                 Text("Agent: max steps per task", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

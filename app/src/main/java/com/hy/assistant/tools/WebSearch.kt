@@ -13,19 +13,21 @@ object WebSearch {
     private const val UA = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36"
     private const val MAX_BYTES = 600_000
 
-    data class Outcome(val results: List<SearchResult>, val topText: String?)
+    data class Outcome(val results: List<SearchResult>, val topText: String?, val source: String = "")
 
     /** Blocking; call from Dispatchers.IO. */
     fun search(query: String, readTopPage: Boolean = true): Outcome {
+        var source = "Bing"
         val results = attempt { Web.parseBing(get(Web.bingSearchUrl(query))) }
-            ?: attempt { Web.parseDuckDuckGo(get(Web.ddgSearchUrl(query))) }
-            ?: attempt { Web.parseWikipedia(get(Web.wikipediaSearchUrl(query))) }
+            ?: attempt { Web.parseDuckDuckGo(get(Web.ddgSearchUrl(query))) }.also { source = "DuckDuckGo" }
+            ?: attempt { Web.parseWikipedia(get(Web.wikipediaSearchUrl(query))) }.also { source = "Wikipedia" }
             ?: emptyList()
-        // Reading the best page gives the model real facts instead of 2-line snippets.
-        val top = if (readTopPage) results.firstOrNull()?.let { r ->
-            runCatching { Web.htmlToText(get(r.url, timeoutMs = 6000), 2500) }.getOrNull()?.takeIf { it.length > 200 }
-        } else null
-        return Outcome(results, top)
+        return Outcome(results, if (readTopPage) readTopPage(results) else null, source)
+    }
+
+    /** Reading the best page gives the model real facts instead of 2-line snippets. Blocking. */
+    fun readTopPage(results: List<SearchResult>): String? = results.firstOrNull()?.let { r ->
+        runCatching { Web.htmlToText(get(r.url, timeoutMs = 6000), 2500) }.getOrNull()?.takeIf { it.length > 200 }
     }
 
     /** Downloads a page as text (used by "read this page" outside the WebView too). */

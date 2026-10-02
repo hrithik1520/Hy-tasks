@@ -41,6 +41,18 @@ object Web {
             .getOrDefault(href)
     }
 
+    fun googleSearchUrl(query: String) = "https://www.google.com/search?hl=en&gl=in&num=10&q=" + enc(query)
+
+    /**
+     * Google result text taken from the page (title, breadcrumb, snippet lines) → just the snippet:
+     * drops the title line, "site › path" breadcrumbs, bare URLs and very short UI lines.
+     */
+    fun cleanGoogleSnippet(title: String, raw: String): String =
+        raw.lines().map { it.trim() }.filter { line ->
+            line.length > 2 && line != title.trim() && !line.contains('›') &&
+                !Regex("""^(https?://)?[\w.-]+\.[a-z]{2,}(/\S*)?$""", RegexOption.IGNORE_CASE).matches(line)
+        }.joinToString(" ").replace(Regex("\\s+"), " ").trim().take(300)
+
     fun ddgSearchUrl(query: String) = "https://html.duckduckgo.com/html/?q=" + enc(query)
 
     fun wikipediaSearchUrl(query: String) =

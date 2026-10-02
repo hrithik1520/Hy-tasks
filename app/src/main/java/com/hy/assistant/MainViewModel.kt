@@ -45,7 +45,7 @@ import com.hy.assistant.core.SearchResult
 import com.hy.assistant.core.Web
 import com.hy.assistant.tools.Browser
 import com.hy.assistant.tools.Terminal
-import com.hy.assistant.tools.WebSearch
+import com.hy.assistant.tools.SearchService
 
 /** Result of a read-only assistant task (summary / catch-up). */
 data class AssistantOutput(
@@ -613,9 +613,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _output.value = AssistantOutput("Web search is off", "Turn on \"Web search\" in Settings to let Hy look this up.", false)
             return
         }
-        val title = "Web · $query"
-        _output.value = AssistantOutput(title, "Searching the web…", running = true)
-        val outcome = withContext(Dispatchers.IO) { WebSearch.search(query) }
+        _output.value = AssistantOutput("Search · $query", "Searching the web…", running = true)
+        val outcome = SearchService.search(app, query, settings.current.searchEngine)
+        val title = "${outcome.source.ifEmpty { "Web" }} · $query"
         if (outcome.results.isEmpty()) {
             _output.value = AssistantOutput(title, "", false, error = "No results — check your internet connection.")
             return

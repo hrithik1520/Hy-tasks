@@ -20,6 +20,10 @@ What it does:
   people, how-to…), it searches the web (Bing → DuckDuckGo → Wikipedia, no API key),
   reads the top page and answers with tappable sources. Only the search words leave the
   phone. Can be turned off in Settings.
+  **Search engine** setting: *Bing* (default, free) or *Google (via browser)*, which reads Google's
+  results page in a hidden in-app browser. If Google asks "I'm not a robot", a popup shows the
+  check so you can solve it, then the search continues. If you skip it or anything fails, Hy
+  uses Bing. Google's terms don't allow automated searches, so keep it to light personal use.
 - **In-app browser**: `open youtube and search lofi`, `open github.com`. Ask questions about
   any page you're on ("summarize this", "what's the price?").
 - **Terminal**: run commands in the phone's own shell or in **Termux** (full Linux:

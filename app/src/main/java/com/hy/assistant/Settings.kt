@@ -2,6 +2,7 @@ package com.hy.assistant
 
 import android.content.Context
 import com.hy.assistant.core.Tone
+import com.hy.assistant.tools.SearchEngine
 import com.hy.assistant.tools.TerminalBackend
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,7 @@ data class SettingsData(
     val terminalBackend: TerminalBackend = TerminalBackend.LOCAL,
     /** Most steps a multi-step agent run may take before it must answer. */
     val agentMaxSteps: Int = 10,
+    val searchEngine: SearchEngine = SearchEngine.BING,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -83,6 +85,7 @@ class Settings(context: Context) {
             terminalBackend = runCatching { TerminalBackend.valueOf(prefs.getString("terminalBackend", d.terminalBackend.name)!!) }
                 .getOrDefault(d.terminalBackend),
             agentMaxSteps = prefs.getInt("agentMaxSteps", d.agentMaxSteps),
+            searchEngine = runCatching { SearchEngine.valueOf(prefs.getString("searchEngine", d.searchEngine.name)!!) }.getOrDefault(d.searchEngine),
         )
     }
 
@@ -108,6 +111,7 @@ class Settings(context: Context) {
             .putBoolean("webSearch", d.webSearch)
             .putString("terminalBackend", d.terminalBackend.name)
             .putInt("agentMaxSteps", d.agentMaxSteps)
+            .putString("searchEngine", d.searchEngine.name)
             .apply()
         _data.value = d
     }
