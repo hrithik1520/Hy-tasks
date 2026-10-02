@@ -3,6 +3,8 @@ package com.hy.assistant
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.hy.assistant.core.Agent
+import com.hy.assistant.core.AgentAction
 import com.hy.assistant.core.Command
 import com.hy.assistant.core.CommandParser
 import com.hy.assistant.core.ContactMatcher
@@ -40,7 +42,7 @@ data class ReplyProposal(
     val canSend: Boolean,
 )
 
-data class Disambiguation(val query: String, val candidates: List<Chat>, val command: Command)
+data class Disambiguation(val query: String, val candidates: List<Chat>, val onPick: (Chat) -> Unit)
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as HyApp
@@ -101,47 +103,144 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Commands -------------------------------------------------------------------
 
+    /**
+     * Any English request. Common phrasings are handled instantly by rules; everything else
+     * goes to the on-device model, which picks an action (grammar-constrained) or answers.
+     */
     fun runCommand(input: String) {
+        val text = input.trim()
+        if (text.isEmpty()) return
         val names = chats.value.map { it.name }
-        when (val cmd = CommandParser.parse(input, names)) {
+        val hasModel = models.activeModelFile() != null
+        // If a rule matched but the name isn't a known chat, the rule probably misfired
+        // ("summarize the news") — let the AI handle the whole request instead.
+        val fallback: () -> Unit = { if (hasModel) runAgent(text) else showNotFoundOrHelp(text) }
+        when (val cmd = CommandParser.parse(text, names)) {
             Command.Digest -> digest()
-            is Command.Summarize -> withChat(cmd.contact, cmd) { summarize(it.key) }
-            is Command.DraftReply -> withChat(cmd.contact, cmd) { draftReply(it.key, null) }
-            is Command.Reply -> withChat(cmd.contact, cmd) { draftReply(it.key, cmd.gist) }
-            is Command.Unknown -> _output.value = AssistantOutput(
-                title = "I didn't get that",
-                text = "Try:\n• What did I miss?\n• Summarize Rahul\n• Suggest a reply to Mom\n• Reply to Rahul saying I'm in a meeting",
-                running = false,
-            )
+            is Command.Summarize -> withChat(cmd.contact, fallback) { summarize(it.key) }
+            is Command.DraftReply -> withChat(cmd.contact, fallback) { draftReply(it.key, null) }
+            is Command.Reply -> withChat(cmd.contact, fallback) { draftReply(it.key, cmd.gist) }
+            is Command.Unknown -> if (hasModel) runAgent(text) else showNotFoundOrHelp(text)
         }
+    }
+
+    private fun showNotFoundOrHelp(text: String) {
+        _output.value = AssistantOutput(
+            title = "Need the AI model",
+            text = "Without a model I only understand:\n• What did I miss?\n• Summarize <chat>\n• Reply to <chat> saying …\n\n" +
+                "Download a model (Models) and you can ask anything, e.g. \"$text\".",
+            running = false,
+        )
+    }
+
+    private fun runAgent(request: String) {
+        job?.cancel()
+        _output.value = AssistantOutput("Hy", "", running = true)
+        val names = chats.value.map { it.name }
+        job = viewModelScope.launch {
+            val action = try {
+                val raw = StringBuilder()
+                stream(Agent.routePrompt(request, names)) { raw.append(it) }
+                Agent.parse(raw.toString()) ?: AgentAction.Answer
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AgentAction.Answer
+            }
+            execute(action, request)
+        }
+    }
+
+    private fun execute(action: AgentAction, request: String) {
+        when (action) {
+            AgentAction.Answer -> runReadOnly("Hy", Agent.answerPrompt(request, buildContext(), settings.current.userName))
+            AgentAction.Digest -> digest()
+            is AgentAction.Summarize -> withChat(action.contact, notFound(action.contact)) { summarize(it.key) }
+            is AgentAction.DraftReply -> withChat(action.contact, notFound(action.contact)) { draftReply(it.key, null) }
+            is AgentAction.Reply -> withChat(action.contact, notFound(action.contact)) { chat ->
+                _output.value = null
+                // The model already wrote the final text; the confirmation card still applies.
+                _proposal.value = ReplyProposal(chat.key, chat.name, chat.packageName, TextCleanup.cleanReply(action.message), false, chat.canReply)
+            }
+            is AgentAction.SetMode -> {
+                _output.value = null
+                setReplyMode(if (action.auto) ReplyMode.AUTO else ReplyMode.MANUAL)
+            }
+            is AgentAction.SetChatMode -> withChat(action.contact, notFound(action.contact)) { chat ->
+                val mode = ChatMode.valueOf(action.mode.uppercase())
+                setChatMode(chat.key, mode)
+                _output.value = null
+                _messages.tryEmit("${chat.name}: ${mode.label}")
+            }
+        }
+    }
+
+    private fun notFound(query: String): () -> Unit = {
+        _output.value = AssistantOutput(
+            title = "No chat found",
+            text = "I don't have recent messages from \"$query\". I can only see chats that sent a notification in the last 3 days.",
+            running = false,
+        )
+    }
+
+    /** Recent chats + notifications for free-form questions, sized to fit the context window. */
+    private fun buildContext(): String {
+        val budget = if (settings.current.contextSize >= 4096) 7000 else 3000
+        val fmt = java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.getDefault())
+        val sb = StringBuilder()
+        sb.append("Now: ").append(fmt.format(java.util.Date())).append("\n")
+        for (c in chats.value.take(10)) {
+            if (sb.length > budget * 2 / 3) break
+            sb.append("\n## Chat: ").append(c.name).append(" (").append(c.appName)
+            if (c.unread.isNotEmpty()) sb.append(", ").append(c.unread.size).append(" unread")
+            sb.append(")\n")
+            for (m in c.messages.takeLast(4)) {
+                sb.append(fmt.format(java.util.Date(m.timestamp))).append(" ")
+                    .append(if (m.fromMe) "Me" else m.sender).append(": ").append(m.text.take(160)).append("\n")
+            }
+        }
+        val items = feed.value
+        if (items.isNotEmpty()) sb.append("\n## Other notifications\n")
+        for (f in items.take(20)) {
+            if (sb.length > budget) break
+            sb.append("- ").append(fmt.format(java.util.Date(f.timestamp))).append(" [").append(f.category.label).append("] ")
+                .append(f.appName).append(": ").append(listOf(f.title, f.text).filter { it.isNotBlank() }.joinToString(" — ").take(140))
+                .append("\n")
+        }
+        return sb.toString().take(budget)
+    }
+
+    /** Free-form question about one chat ("did she confirm the time?", "list what he asked for"). */
+    fun askAboutChat(chatKey: String, question: String) {
+        val chat = MessageStore.chat(chatKey) ?: return
+        if (question.isBlank()) return
+        if (models.activeModelFile() == null) {
+            _output.value = AssistantOutput(chat.name, "", false, error = NO_MODEL)
+            return
+        }
+        val ctx = "## Chat: ${chat.name}\n" + Prompts.transcript(chat.messages.map { it.toChatLine() }, 3000)
+        runReadOnly(chat.name, Agent.answerPrompt(question, ctx, settings.current.userName))
     }
 
     fun chooseCandidate(chat: Chat) {
         val d = _disambiguation.value ?: return
         _disambiguation.value = null
-        when (val cmd = d.command) {
-            is Command.Summarize -> summarize(chat.key)
-            is Command.DraftReply -> draftReply(chat.key, null)
-            is Command.Reply -> draftReply(chat.key, cmd.gist)
-            else -> Unit
-        }
+        d.onPick(chat)
     }
 
     fun dismissDisambiguation() {
         _disambiguation.value = null
     }
 
-    private fun withChat(query: String, cmd: Command, action: (Chat) -> Unit) {
+    private fun withChat(query: String, onNotFound: () -> Unit, action: (Chat) -> Unit) {
         val all = chats.value
         when (val r = ContactMatcher.resolve(query, all.map { it.name })) {
             is ContactMatcher.Result.Unique -> action(all.first { it.name == r.name })
-            is ContactMatcher.Result.Ambiguous ->
-                _disambiguation.value = Disambiguation(query, r.candidates.mapNotNull { n -> all.firstOrNull { it.name == n } }, cmd)
-            ContactMatcher.Result.NotFound -> _output.value = AssistantOutput(
-                title = "No chat found",
-                text = "I don't have recent WhatsApp messages from \"$query\". I can only see chats that sent a notification in the last 3 days.",
-                running = false,
-            )
+            is ContactMatcher.Result.Ambiguous -> {
+                _output.value = null
+                _disambiguation.value = Disambiguation(query, r.candidates.mapNotNull { n -> all.firstOrNull { it.name == n } }, action)
+            }
+            ContactMatcher.Result.NotFound -> onNotFound()
         }
     }
 

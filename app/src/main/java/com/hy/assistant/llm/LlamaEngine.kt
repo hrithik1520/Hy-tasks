@@ -64,6 +64,7 @@ class LlamaEngine(private val scope: CoroutineScope) {
                     nThreads,
                     prompt.maxTokens,
                     prompt.temperature,
+                    prompt.grammar?.toByteArray(Charsets.UTF_8),
                 ) { bytes ->
                     trySend(String(bytes, Charsets.UTF_8))
                     !cancelled.get()

@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include "llm_core.h"
 #include "llama.h"
 
@@ -16,6 +17,24 @@ int main(int argc, char **argv) {
 
     hy::backend_init();
     bool vocab_only = argc > 2 && strcmp(argv[2], "--vocab-only") == 0;
+    if (argc > 3 && strcmp(argv[2], "--grammar-file") == 0) {
+        // Validate a GBNF file and sample a few constrained outputs.
+        FILE *f = fopen(argv[3], "rb");
+        std::string g;
+        char buf[4096];
+        size_t r;
+        while ((r = fread(buf, 1, sizeof buf, f)) > 0) g.append(buf, r);
+        fclose(f);
+        llama_model *m = hy::load_model(argv[1]);
+        for (int i = 0; i < 5; i++) {
+            hy::GenParams p; p.max_tokens = 120; p.n_ctx = 512; p.temperature = 1.0f; p.grammar = g; p.seed = 100 + i;
+            std::string out;
+            int n = hy::generate(m, "Pick an action.", "do something", p, [&](const std::string &s) { out += s; return true; });
+            printf("[%d] n=%d %s %s\n", i, n, out.c_str(), n < 0 ? hy::last_error().c_str() : "");
+        }
+        hy::free_model(m);
+        return 0;
+    }
     llama_model *model;
     if (vocab_only) {
         auto mp = llama_model_default_params();
@@ -31,6 +50,17 @@ int main(int argc, char **argv) {
         int n = hy::generate(model, "You are helpful.", "Say hello in five words.", p,
                              [](const std::string &s) { printf("%s", s.c_str()); fflush(stdout); return true; });
         printf("\n[generated %d tokens] %s\n", n, n < 0 ? hy::last_error().c_str() : "");
+    }
+    if (!vocab_only) {
+        hy::GenParams p; p.max_tokens = 64; p.n_ctx = 512; p.temperature = 0;
+        p.grammar = R"(root ::= "{\"action\":\"" ("answer" | "digest") "\"}")";
+        std::string out;
+        int n = hy::generate(model, "Pick an action.", "what did I miss", p, [&](const std::string &s) { out += s; return true; });
+        printf("[grammar] %d tokens -> %s\n", n, out.c_str());
+        assert(n > 0 && (out == "{\"action\":\"answer\"}" || out == "{\"action\":\"digest\"}"));
+        p.grammar = "root ::= (";  // invalid
+        assert(hy::generate(model, "x", "y", p, [](const std::string &) { return true; }) == -6);
+        printf("grammar ok\n");
     }
     hy::free_model(model);
     return 0;

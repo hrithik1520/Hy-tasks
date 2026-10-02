@@ -112,6 +112,16 @@ int generate(llama_model *model, const std::string &system, const std::string &u
     llama_sampler_chain_params sp = llama_sampler_chain_default_params();
     sp.no_perf = true;
     llama_sampler *smpl = llama_sampler_chain_init(sp);
+    if (!p.grammar.empty()) {
+        llama_sampler *g = llama_sampler_init_grammar(vocab, p.grammar.c_str(), "root");
+        if (!g) {
+            set_error("Invalid grammar");
+            llama_sampler_free(smpl);
+            llama_free(ctx);
+            return -6;
+        }
+        llama_sampler_chain_add(smpl, g);
+    }
     if (p.temperature <= 0.0f) {
         llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
     } else {

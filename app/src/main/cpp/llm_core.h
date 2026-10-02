@@ -17,6 +17,8 @@ struct GenParams {
     float top_p = 0.9f;
     int top_k = 40;
     unsigned int seed = 0xFFFFFFFF;  // LLAMA_DEFAULT_SEED -> random
+    // Optional GBNF grammar (root rule "root") that constrains the output, e.g. to JSON actions.
+    std::string grammar;
 };
 
 // Receives complete UTF-8 text chunks. Return false to stop generation.

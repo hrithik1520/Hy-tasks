@@ -210,7 +210,7 @@ fun HomeScreen(
                         value = command,
                         onValueChange = { command = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("e.g. Reply to Rahul saying I'm late") },
+                        placeholder = { Text("Ask or tell Hy anything…") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { submit() }),

@@ -2,7 +2,8 @@ package com.hy.assistant.core
 
 data class ChatLine(val sender: String, val text: String, val timestamp: Long, val fromMe: Boolean)
 
-data class Prompt(val system: String, val user: String, val maxTokens: Int, val temperature: Float)
+/** [grammar]: optional GBNF that constrains the output (see [Agent.GRAMMAR]). */
+data class Prompt(val system: String, val user: String, val maxTokens: Int, val temperature: Float, val grammar: String? = null)
 
 enum class Tone(val description: String) {
     CASUAL("casual and friendly"),

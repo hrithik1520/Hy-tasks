@@ -22,6 +22,7 @@ object LlamaNative {
         nThreads: Int,
         maxTokens: Int,
         temperature: Float,
+        grammar: ByteArray?,
         callback: TokenCallback,
     ): Int
     external fun lastError(): String

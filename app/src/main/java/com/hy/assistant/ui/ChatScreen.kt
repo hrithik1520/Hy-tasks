@@ -21,6 +21,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -52,6 +60,13 @@ fun ChatScreen(vm: MainViewModel, chatKey: String, snackbar: SnackbarHostState, 
     val settings by vm.settings.data.collectAsState()
     val chat = chats.firstOrNull { it.key == chatKey }
     val listState = rememberLazyListState()
+    var question by rememberSaveable { mutableStateOf("") }
+    val ask = {
+        if (question.isNotBlank()) {
+            vm.askAboutChat(chatKey, question)
+            question = ""
+        }
+    }
 
     LaunchedEffect(chat?.messages?.size) {
         val n = chat?.messages?.size ?: 0
@@ -126,6 +141,18 @@ fun ChatScreen(vm: MainViewModel, chatKey: String, snackbar: SnackbarHostState, 
                     ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal)
                 }
                 output?.let { OutputCard(it, vm::dismissOutput) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = question,
+                        onValueChange = { question = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("Ask anything about this chat…") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { ask() }),
+                    )
+                    IconButton(onClick = ask) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Ask") }
+                }
                 Row {
                     FilledTonalButton(onClick = { vm.summarize(chatKey) }) { Text("Summarize") }
                     Spacer(Modifier.width(8.dp))

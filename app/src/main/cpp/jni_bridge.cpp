@@ -49,7 +49,7 @@ JNIEXPORT void JNICALL Java_com_hy_assistant_llm_LlamaNative_freeModel(JNIEnv *,
 
 JNIEXPORT jint JNICALL Java_com_hy_assistant_llm_LlamaNative_generate(
     JNIEnv *env, jobject, jlong handle, jbyteArray system, jbyteArray user, jint n_ctx,
-    jint n_threads, jint max_tokens, jfloat temperature, jobject callback) {
+    jint n_threads, jint max_tokens, jfloat temperature, jbyteArray grammar, jobject callback) {
     jclass cb_class = env->GetObjectClass(callback);
     jmethodID on_bytes = env->GetMethodID(cb_class, "onBytes", "([B)Z");
     if (!on_bytes) return -10;
@@ -59,6 +59,7 @@ JNIEXPORT jint JNICALL Java_com_hy_assistant_llm_LlamaNative_generate(
     params.n_threads = n_threads;
     params.max_tokens = max_tokens;
     params.temperature = temperature;
+    params.grammar = to_string(env, grammar);
 
     auto on_text = [&](const std::string &text) -> bool {
         jbyteArray arr = env->NewByteArray((jsize)text.size());

@@ -9,8 +9,13 @@ What it does:
 - **"What did I miss?"**: a one-line-per-chat catch-up of unread WhatsApp messages.
 - **Summarize a chat**: short bullet points, flags questions waiting on you.
 - **Suggest a reply**: drafts a reply in your tone; you edit it, then tap **Send**.
-- **Commands**: `Reply to Rahul saying I'm in a meeting`, `Summarize college group`,
-  `Suggest a reply to Mom`.
+- **Ask or tell it anything, in any format**: type a request in plain English.
+  Simple ones (`Reply to Rahul saying I'm in a meeting`, `What did I miss?`) run instantly.
+  Everything else goes to the on-device AI, which either does it (reply, summarize,
+  switch Auto/Manual for a chat…) or answers using your recent chats and notifications:
+  `did anyone mention dinner?`, `list my unread chats as a table`,
+  `write a leave application for tomorrow`, `stop auto replying to the office group`.
+  Each chat also has an "Ask anything about this chat" box.
 - **Two reply modes** (switch on the home screen, or per chat):
   - **Manual**: every new message gets a drafted reply in a notification. Tap **Send**
     right from the notification shade, or **Reply** to type your own.
