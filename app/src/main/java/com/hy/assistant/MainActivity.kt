@@ -1,5 +1,6 @@
 package com.hy.assistant
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -9,6 +10,7 @@ import androidx.activity.viewModels
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,7 +31,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        handleIntent(intent)
         setContent { HyTheme { App(vm) } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        intent?.getStringExtra(EXTRA_OPEN_CHAT)?.let { vm.requestOpenChat(it) }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_CHAT = "open_chat"
     }
 }
 
@@ -38,9 +54,16 @@ class MainActivity : ComponentActivity() {
 private fun App(vm: MainViewModel) {
     var route by rememberSaveable { mutableStateOf("home") }
     val snackbar = remember { SnackbarHostState() }
+    val openChat by vm.openChat.collectAsState()
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshStatus() }
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    LaunchedEffect(openChat) {
+        openChat?.let {
+            route = "chat:$it"
+            vm.consumeOpenChat()
+        }
+    }
 
     BackHandler(enabled = route != "home") { route = "home" }
     val back = { route = "home" }

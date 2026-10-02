@@ -134,7 +134,7 @@ fun ChatRow(chat: Chat, onClick: () -> Unit) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    chat.name,
+                    if (chat.isWhatsApp) chat.name else "${chat.name} · ${chat.appName}",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = if (unread > 0) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.weight(1f),

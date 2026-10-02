@@ -24,6 +24,7 @@ data class Chat(
     val key: String,
     val name: String,
     val packageName: String,
+    val appName: String,
     val isGroup: Boolean,
     val messages: List<StoredMessage>,
     val lastReadAt: Long,
@@ -31,6 +32,7 @@ data class Chat(
 ) {
     val lastTimestamp: Long get() = messages.lastOrNull()?.timestamp ?: 0L
     val unread: List<StoredMessage> get() = messages.filter { !it.fromMe && it.timestamp > lastReadAt }
+    val isWhatsApp: Boolean get() = packageName.startsWith("com.whatsapp")
 }
 
 /** Live notification reply action for a chat. Only valid while WhatsApp's notification is showing. */
@@ -49,6 +51,7 @@ object MessageStore {
         val key: String,
         var name: String,
         var packageName: String,
+        var appName: String,
         var isGroup: Boolean,
         val messages: MutableList<StoredMessage> = mutableListOf(),
         var lastReadAt: Long = 0L,
@@ -75,22 +78,27 @@ object MessageStore {
 
     fun replyHandle(key: String): ReplyHandle? = synchronized(lock) { replyHandles[key] }
 
+    /** Adds messages from a notification. Returns the incoming messages that were new. */
     fun ingest(
         key: String,
         name: String,
         packageName: String,
+        appName: String,
         isGroup: Boolean,
         messages: List<StoredMessage>,
         reply: ReplyHandle?,
-    ) {
+    ): List<StoredMessage> {
+        val added = mutableListOf<StoredMessage>()
         synchronized(lock) {
-            val chat = chats.getOrPut(key) { MutableChat(key, name, packageName, isGroup) }
+            val chat = chats.getOrPut(key) { MutableChat(key, name, packageName, appName, isGroup) }
             chat.name = name
             chat.packageName = packageName
+            chat.appName = appName
             chat.isGroup = isGroup
             for (m in messages) {
                 if (m.text.isBlank() || isDuplicate(chat, m)) continue
                 chat.messages.add(m)
+                if (!m.fromMe) added.add(m)
             }
             chat.messages.sortBy { it.timestamp }
             while (chat.messages.size > MAX_PER_CHAT) chat.messages.removeAt(0)
@@ -98,6 +106,7 @@ object MessageStore {
         }
         publish()
         scheduleSave()
+        return added
     }
 
     /** Records a reply we sent so it shows immediately (WhatsApp's echo is de-duplicated). */
@@ -152,7 +161,7 @@ object MessageStore {
             chats.values.forEach { c -> c.messages.removeAll { it.timestamp < cutoff } }
             chats.values.removeAll { it.messages.isEmpty() && !replyHandles.containsKey(it.key) }
             chats.values.map {
-                Chat(it.key, it.name, it.packageName, it.isGroup, it.messages.toList(), it.lastReadAt, replyHandles.containsKey(it.key))
+                Chat(it.key, it.name, it.packageName, it.appName, it.isGroup, it.messages.toList(), it.lastReadAt, replyHandles.containsKey(it.key))
             }
         }
         _state.value = snapshot.sortedByDescending { it.lastTimestamp }
@@ -175,7 +184,7 @@ object MessageStore {
                     msgs.put(JSONObject().put("s", it.sender).put("t", it.text).put("ts", it.timestamp).put("me", it.fromMe))
                 }
                 arr.put(
-                    JSONObject().put("key", c.key).put("name", c.name).put("pkg", c.packageName)
+                    JSONObject().put("key", c.key).put("name", c.name).put("pkg", c.packageName).put("app", c.appName)
                         .put("group", c.isGroup).put("read", c.lastReadAt).put("messages", msgs),
                 )
             }
@@ -193,7 +202,7 @@ object MessageStore {
             val arr = JSONArray(file.readText())
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                val c = MutableChat(o.getString("key"), o.getString("name"), o.getString("pkg"), o.optBoolean("group"))
+                val c = MutableChat(o.getString("key"), o.getString("name"), o.getString("pkg"), o.optString("app", "WhatsApp"), o.optBoolean("group"))
                 c.lastReadAt = o.optLong("read")
                 val msgs = o.getJSONArray("messages")
                 for (j in 0 until msgs.length()) {

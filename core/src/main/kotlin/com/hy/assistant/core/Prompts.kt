@@ -69,6 +69,23 @@ object Prompts {
         )
     }
 
+    /**
+     * Reply sent without the user looking. Must never invent facts or make commitments:
+     * when unsure it sends a short holding reply instead.
+     */
+    fun autoReply(chatName: String, lines: List<ChatLine>, userName: String, tone: Tone): Prompt {
+        val me = userName.ifBlank { "the user" }
+        return Prompt(
+            system = "You reply to WhatsApp messages on behalf of $me while they are busy. Tone: ${tone.description}. $DATA_RULE " +
+                "Rules: reply in English, at most 2 short sentences. Never invent facts, plans, times, prices or promises. " +
+                "If the message needs a decision, a commitment, or information you don't have, reply with a short friendly " +
+                "holding message saying $me will get back soon. Output only the message text.",
+            user = "Chat: $chatName\n<messages>\n${transcript(lines, 2000)}\n</messages>\nWrite $me's reply to the latest message.",
+            maxTokens = 60,
+            temperature = 0.4f,
+        )
+    }
+
     /** Keeps the most recent lines that fit in [maxChars]. */
     fun transcript(lines: List<ChatLine>, maxChars: Int = MAX_TRANSCRIPT_CHARS): String {
         val out = ArrayDeque<String>()

@@ -8,7 +8,12 @@ import com.hy.assistant.core.CommandParser
 import com.hy.assistant.core.ContactMatcher
 import com.hy.assistant.core.Prompt
 import com.hy.assistant.core.Prompts
+import com.hy.assistant.core.NotificationClassifier.Category
 import com.hy.assistant.core.TextCleanup
+import com.hy.assistant.auto.ActivityLog
+import com.hy.assistant.auto.HyNotifications
+import com.hy.assistant.notifications.FeedItem
+import com.hy.assistant.notifications.NotificationFeed
 import com.hy.assistant.notifications.Chat
 import com.hy.assistant.notifications.MessageStore
 import com.hy.assistant.notifications.ReplySender
@@ -43,6 +48,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val models = app.models
     val engine = app.engine
     val chats: StateFlow<List<Chat>> = MessageStore.state
+    val feed: StateFlow<List<FeedItem>> = NotificationFeed.state
+    val activity: StateFlow<List<ActivityLog.Entry>> = ActivityLog.entries
+
+    private val _canNotify = MutableStateFlow(HyNotifications.canPost(app))
+    val canNotify: StateFlow<Boolean> = _canNotify.asStateFlow()
+
+    /** Chat to open, e.g. after tapping a Hy notification. */
+    private val _openChat = MutableStateFlow<String?>(null)
+    val openChat: StateFlow<String?> = _openChat.asStateFlow()
+
+    fun requestOpenChat(key: String?) {
+        _openChat.value = key
+    }
+
+    fun consumeOpenChat() {
+        _openChat.value = null
+    }
+
+    fun setReplyMode(mode: ReplyMode) {
+        settings.update { it.copy(replyMode = mode) }
+        _messages.tryEmit(
+            if (mode == ReplyMode.AUTO) "Auto mode on — Hy will reply by itself (safety rules apply)"
+            else "Manual mode — Hy suggests, you tap Send",
+        )
+    }
+
+    fun setChatMode(chatKey: String, mode: ChatMode) = settings.setChatMode(chatKey, mode)
 
     private val _listenerEnabled = MutableStateFlow(WhatsAppListenerService.isEnabled(app))
     val listenerEnabled: StateFlow<Boolean> = _listenerEnabled.asStateFlow()
@@ -63,6 +95,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshStatus() {
         _listenerEnabled.value = WhatsAppListenerService.isEnabled(app)
+        _canNotify.value = HyNotifications.canPost(app)
         models.refresh()
     }
 
@@ -116,17 +149,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun digest() {
         val unread = chats.value.filter { it.unread.isNotEmpty() }
+        val others = feedDigest(NotificationFeed.unseen())
+        NotificationFeed.markSeen()
         if (unread.isEmpty()) {
-            _output.value = AssistantOutput("Catch-up", "You're all caught up — no unread WhatsApp messages.", false)
+            val text = "No unread messages." + if (others.isNotEmpty()) "\n\n$others" else ""
+            _output.value = AssistantOutput("Catch-up", text, false)
             return
         }
         // Without a model, fall back to a plain list so the feature still works.
         if (models.activeModelFile() == null) {
-            _output.value = AssistantOutput("Catch-up", plainDigest(unread), false)
+            _output.value = AssistantOutput("Catch-up", plainDigest(unread) + if (others.isNotEmpty()) "\n\n$others" else "", false)
             return
         }
         val prompt = Prompts.digest(unread.take(8).associate { c -> c.name to c.unread.map { it.toChatLine() } })
-        runReadOnly("Catch-up", prompt)
+        runReadOnly("Catch-up", prompt, suffix = others)
+    }
+
+    /** Plain-text roundup of other apps' notifications (no AI needed). */
+    private fun feedDigest(items: List<FeedItem>): String {
+        if (items.isEmpty()) return ""
+        val sb = StringBuilder("Other notifications:")
+        val important = listOf(Category.OTP, Category.PAYMENT, Category.DELIVERY, Category.CALENDAR, Category.OTHER)
+        for (cat in important) {
+            val list = items.filter { it.category == cat }
+            if (list.isEmpty()) continue
+            sb.append("\n").append(cat.label).append(":")
+            list.take(3).forEach { sb.append("\n• ").append(it.appName).append(" — ").append(listOf(it.title, it.text).filter { t -> t.isNotBlank() }.joinToString(": ").take(90)) }
+            if (list.size > 3) sb.append("\n  …and ${list.size - 3} more")
+        }
+        val minor = items.count { it.category == Category.SOCIAL || it.category == Category.PROMO }
+        if (minor > 0) sb.append("\nPlus $minor social/offer notifications.")
+        return sb.toString()
     }
 
     fun summarize(chatKey: String) {
@@ -144,7 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         "• ${c.name} (${c.unread.size}): $who${last.text.take(80)}"
     }
 
-    private fun runReadOnly(title: String, prompt: Prompt) {
+    private fun runReadOnly(title: String, prompt: Prompt, suffix: String = "") {
         job?.cancel()
         _output.value = AssistantOutput(title, "", running = true)
         job = viewModelScope.launch {
@@ -154,7 +207,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sb.append(chunk)
                     _output.value = AssistantOutput(title, sb.toString().trim(), running = true)
                 }
-                _output.value = AssistantOutput(title, sb.toString().trim(), running = false)
+                val full = sb.toString().trim() + if (suffix.isNotEmpty()) "\n\n$suffix" else ""
+                _output.value = AssistantOutput(title, full, running = false)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -229,6 +283,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         when (val r = ReplySender.send(app, p.chatKey, text)) {
             ReplySender.Result.Sent -> {
                 _proposal.value = null
+                HyNotifications.cancel(app, p.chatKey)
+                ActivityLog.add(ActivityLog.Kind.SENT, p.chatName, text)
                 _messages.tryEmit("Sent to ${p.chatName}")
             }
             is ReplySender.Result.Failed -> {

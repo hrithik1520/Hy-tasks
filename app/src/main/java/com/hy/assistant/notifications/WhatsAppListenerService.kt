@@ -3,6 +3,8 @@ package com.hy.assistant.notifications
 import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.os.Build
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -11,15 +13,18 @@ import androidx.core.app.NotificationCompat
 import com.hy.assistant.HyApp
 
 /**
- * Reads WhatsApp message notifications (the only way to see WhatsApp messages without an
- * official API) and remembers each chat's inline-reply action.
+ * Watches notifications. Chat notifications (MessagingStyle) become chats with an inline-reply
+ * action; everything else goes to [NotificationFeed]. New incoming messages are handed to the
+ * automation layer. (Class name kept for compatibility: renaming would revoke granted access.)
  */
 class WhatsAppListenerService : NotificationListenerService() {
+    private val appNames = HashMap<String, String>()
 
     override fun onListenerConnected() {
         connected = true
         try {
-            activeNotifications?.forEach { handle(it) }
+            // Initial scan: remember what's already showing, but don't auto-reply to it.
+            activeNotifications?.forEach { handle(it, initialScan = true) }
         } catch (e: Exception) {
             Log.w(TAG, "initial scan failed", e)
         }
@@ -31,33 +36,49 @@ class WhatsAppListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         try {
-            handle(sbn)
+            handle(sbn, initialScan = false)
         } catch (e: Exception) {
             Log.w(TAG, "failed to parse notification", e)
         }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        if (isWatched(sbn.packageName)) MessageStore.onNotificationRemoved(sbn.key)
+        MessageStore.onNotificationRemoved(sbn.key)
     }
 
-    private fun isWatched(pkg: String): Boolean =
-        pkg == WHATSAPP || (pkg == WHATSAPP_BUSINESS && HyApp.instance.settings.current.includeBusiness)
+    private fun handle(sbn: StatusBarNotification, initialScan: Boolean) {
+        val pkg = sbn.packageName
+        if (pkg == packageName || pkg in IGNORED_PACKAGES) return
+        val settings = HyApp.instance.settings.current
+        if (pkg == WHATSAPP_BUSINESS && !settings.includeBusiness) return
+        val isWhatsApp = pkg == WHATSAPP || pkg == WHATSAPP_BUSINESS
+        if (!isWhatsApp && !settings.watchAllApps) return
 
-    private fun handle(sbn: StatusBarNotification) {
-        if (!isWatched(sbn.packageName)) return
         val n = sbn.notification
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
-        // Calls, backups, "WhatsApp Web is active", etc. have no MessagingStyle.
-        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n) ?: return
+        if (n.flags and (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_FOREGROUND_SERVICE) != 0) return
 
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
+        if (style != null) handleChat(sbn, n, style, isWhatsApp, initialScan)
+        else if (!isWhatsApp) handleOther(sbn, n) // WhatsApp's non-chat notices (backups, calls…) are noise
+    }
+
+    private fun handleChat(
+        sbn: StatusBarNotification,
+        n: Notification,
+        style: NotificationCompat.MessagingStyle,
+        isWhatsApp: Boolean,
+        initialScan: Boolean,
+    ) {
         val extras = n.extras
         val rawName = style.conversationTitle
             ?: extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)
             ?: extras.getCharSequence(Notification.EXTRA_TITLE)
             ?: return
         val name = cleanTitle(rawName.toString())
-        val key = n.shortcutId ?: sbn.tag ?: name
+        val id = n.shortcutId ?: sbn.tag ?: name
+        // WhatsApp keys stay un-prefixed so data from earlier versions keeps working.
+        val key = if (isWhatsApp) id else "${sbn.packageName}:$id"
 
         val selfName = style.user.name?.toString()
         val messages = style.messages.mapNotNull { m ->
@@ -69,14 +90,44 @@ class WhatsAppListenerService : NotificationListenerService() {
             StoredMessage(sender, text, m.timestamp, fromMe)
         }
 
-        MessageStore.ingest(
+        val added = MessageStore.ingest(
             key = key,
             name = name,
             packageName = sbn.packageName,
+            appName = appName(sbn),
             isGroup = style.isGroupConversation,
             messages = messages,
             reply = findReplyAction(n)?.let { ReplyHandle(it, sbn.key) },
         )
+        if (!initialScan && added.isNotEmpty()) {
+            // Ignore stale history that WhatsApp re-posts (e.g. after reboot).
+            val fresh = added.filter { System.currentTimeMillis() - it.timestamp < FRESH_MS }
+            if (fresh.isNotEmpty()) HyApp.instance.automation.onIncoming(key)
+        }
+    }
+
+    private fun handleOther(sbn: StatusBarNotification, n: Notification) {
+        val extras = n.extras
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT))
+            ?.toString().orEmpty()
+        NotificationFeed.add(sbn.key, sbn.packageName, appName(sbn), title.trim(), text.trim(), sbn.postTime)
+    }
+
+    /** App label from the notification itself (avoids needing QUERY_ALL_PACKAGES). */
+    private fun appName(sbn: StatusBarNotification): String = appNames.getOrPut(sbn.packageName) {
+        val info: ApplicationInfo? = try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                sbn.notification.extras.getParcelable("android.appInfo", ApplicationInfo::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                sbn.notification.extras.getParcelable("android.appInfo")
+            }
+        } catch (e: Exception) {
+            null
+        }
+        val label = info?.let { runCatching { packageManager.getApplicationLabel(it).toString() }.getOrNull() }
+        label ?: KNOWN_APPS[sbn.packageName] ?: sbn.packageName.substringAfterLast('.').replaceFirstChar { it.uppercase() }
     }
 
     private fun findReplyAction(n: Notification): Notification.Action? {
@@ -86,9 +137,19 @@ class WhatsAppListenerService : NotificationListenerService() {
     }
 
     companion object {
-        private const val TAG = "WaListener"
+        private const val TAG = "HyListener"
         const val WHATSAPP = "com.whatsapp"
         const val WHATSAPP_BUSINESS = "com.whatsapp.w4b"
+        private const val FRESH_MS = 2 * 60 * 1000L
+
+        private val IGNORED_PACKAGES = setOf("android", "com.android.systemui", "com.android.providers.downloads")
+        private val KNOWN_APPS = mapOf(
+            WHATSAPP to "WhatsApp",
+            WHATSAPP_BUSINESS to "WhatsApp Business",
+            "org.telegram.messenger" to "Telegram",
+            "com.google.android.apps.messaging" to "Messages",
+            "com.instagram.android" to "Instagram",
+        )
 
         @Volatile
         var connected = false

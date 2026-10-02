@@ -32,7 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hy.assistant.MainViewModel
 import com.hy.assistant.core.Tone
+import com.hy.assistant.auto.ActivityLog
 import com.hy.assistant.notifications.MessageStore
+import com.hy.assistant.notifications.NotificationFeed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,14 +82,63 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             }
 
             SectionCard {
-                Text("WhatsApp", style = MaterialTheme.typography.titleSmall)
+                Text("Automation", style = MaterialTheme.typography.titleSmall)
+                ToggleRow(
+                    "Suggest replies automatically",
+                    "Manual mode: draft a reply for every new message and show it as a notification with Send.",
+                    s.proactiveSuggestions,
+                ) { v -> vm.settings.update { it.copy(proactiveSuggestions = v) } }
+                Spacer(Modifier.padding(4.dp))
+                Text("Auto mode: wait before sending", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0 to "Instant", 10 to "10 s", 30 to "30 s").forEach { (sec, label) ->
+                        FilterChip(selected = s.autoSendDelaySec == sec, onClick = { vm.settings.update { it.copy(autoSendDelaySec = sec) } }, label = { Text(label) })
+                    }
+                }
+                Text(
+                    "The delay gives you a Cancel button before anything is sent.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.padding(4.dp))
+                Text("At most one auto-reply per chat every", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(2, 5, 15).forEach { m ->
+                        FilterChip(selected = s.autoCooldownMin == m, onClick = { vm.settings.update { it.copy(autoCooldownMin = m) } }, label = { Text("$m min") })
+                    }
+                }
+                ToggleRow("Auto-reply in group chats", "Off by default — group replies are easy to get wrong.", s.autoReplyGroups) { v ->
+                    vm.settings.update { it.copy(autoReplyGroups = v) }
+                }
+                ToggleRow("Auto-reply in other messengers", "Telegram, Messages, etc. (WhatsApp is always included).", s.autoReplyOtherApps) { v ->
+                    vm.settings.update { it.copy(autoReplyOtherApps = v) }
+                }
+                ToggleRow("Add \"— sent by my assistant\"", "Lets people know an auto-reply wasn't typed by you.", s.appendSignature) { v ->
+                    vm.settings.update { it.copy(appendSignature = v) }
+                }
+                Text(
+                    "Always held for you (never auto-sent): OTPs/codes, money & payments, passwords/PINs, emergencies. " +
+                        "Per-chat Auto/Manual/Off is on each chat's screen.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            SectionCard {
+                Text("Notifications Hy watches", style = MaterialTheme.typography.titleSmall)
+                ToggleRow("Watch all apps", "Chats from any messenger + a feed of other notifications (codes, deliveries, payments…).", s.watchAllApps) { v ->
+                    vm.settings.update { it.copy(watchAllApps = v) }
+                }
                 ToggleRow("Include WhatsApp Business", null, s.includeBusiness) { v ->
                     vm.settings.update { it.copy(includeBusiness = v) }
                 }
                 Spacer(Modifier.padding(4.dp))
-                OutlinedButton(onClick = { MessageStore.clearAll() }) { Text("Clear stored messages") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { MessageStore.clearAll(); NotificationFeed.clear() }) { Text("Clear messages") }
+                    OutlinedButton(onClick = { ActivityLog.clear() }) { Text("Clear activity") }
+                }
                 Text(
-                    "Messages are kept only on this phone for 3 days.",
+                    "Messages are kept only on this phone for 3 days, other notifications for 24 hours.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -11,8 +11,17 @@ What it does:
 - **Suggest a reply**: drafts a reply in your tone; you edit it, then tap **Send**.
 - **Commands**: `Reply to Rahul saying I'm in a meeting`, `Summarize college group`,
   `Suggest a reply to Mom`.
-- Nothing is ever sent without your tap on a confirmation card that shows the
-  recipient and the exact text.
+- **Two reply modes** (switch on the home screen, or per chat):
+  - **Manual**: every new message gets a drafted reply in a notification. Tap **Send**
+    right from the notification shade, or **Reply** to type your own.
+  - **Auto**: Hy sends the reply by itself after a short countdown (default 10 s, with
+    **Cancel**). Safety rules always hold back OTPs/codes, money, passwords and
+    emergencies, plus group chats unless you allow them. Those come to you as
+    suggestions instead. Max one auto-reply per chat every 5 min. Everything Hy does
+    is listed under **Hy activity**.
+- **Watches everything automatically**: chats from any messenger, plus a feed of other
+  notifications (codes, deliveries, payments, reminders…) that's included in
+  "What did I miss?".
 
 ## Install on your phone
 

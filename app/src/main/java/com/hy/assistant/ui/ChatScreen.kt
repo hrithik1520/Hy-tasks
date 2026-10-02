@@ -1,6 +1,8 @@
 package com.hy.assistant.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hy.assistant.ChatMode
 import com.hy.assistant.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +49,7 @@ fun ChatScreen(vm: MainViewModel, chatKey: String, snackbar: SnackbarHostState, 
     val chats by vm.chats.collectAsState()
     val output by vm.output.collectAsState()
     val proposal by vm.proposal.collectAsState()
+    val settings by vm.settings.data.collectAsState()
     val chat = chats.firstOrNull { it.key == chatKey }
     val listState = rememberLazyListState()
 
@@ -60,7 +65,7 @@ fun ChatScreen(vm: MainViewModel, chatKey: String, snackbar: SnackbarHostState, 
                     Column {
                         Text(chat?.name ?: "Chat", maxLines = 1)
                         Text(
-                            if (chat?.canReply == true) "Direct reply available" else "Reply via copy & paste",
+                            (chat?.appName ?: "") + " · " + if (chat?.canReply == true) "direct reply available" else "reply via copy & paste",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -105,6 +110,18 @@ fun ChatScreen(vm: MainViewModel, chatKey: String, snackbar: SnackbarHostState, 
                 }
             }
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                    Text("This chat:", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.width(6.dp))
+                    ChatMode.entries.forEach { m ->
+                        FilterChip(
+                            selected = settings.modeFor(chatKey) == m,
+                            onClick = { vm.setChatMode(chatKey, m) },
+                            label = { Text(m.label) },
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
+                }
                 proposal?.takeIf { it.chatKey == chatKey }?.let { p ->
                     ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal)
                 }
