@@ -1,0 +1,12 @@
+# Host (desktop) build of the native LLM core, for testing without Android.
+cmake_minimum_required(VERSION 3.22)
+project(hyllm_hosttest C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+foreach(opt LLAMA_BUILD_COMMON LLAMA_BUILD_TESTS LLAMA_BUILD_TOOLS LLAMA_BUILD_EXAMPLES LLAMA_BUILD_SERVER LLAMA_BUILD_APP LLAMA_OPENSSL GGML_OPENMP)
+  set(${opt} OFF CACHE BOOL "" FORCE)
+endforeach()
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../third_party/llama.cpp build-llama)
+add_executable(hosttest main.cpp ${CMAKE_CURRENT_LIST_DIR}/../../app/src/main/cpp/llm_core.cpp)
+target_include_directories(hosttest PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../../app/src/main/cpp)
+target_link_libraries(hosttest llama)

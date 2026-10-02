@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Hy Assistant</string>
+    <string name="listener_label">Hy Assistant – read WhatsApp notifications</string>
+</resources>

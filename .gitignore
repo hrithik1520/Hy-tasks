@@ -1,0 +1,9 @@
+third_party/
+.gradle/
+build/
+*/build/
+local.properties
+.idea/
+*.iml
+.cxx/
+*/.cxx/
