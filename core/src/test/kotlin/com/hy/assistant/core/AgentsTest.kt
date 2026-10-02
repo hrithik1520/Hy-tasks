@@ -74,6 +74,11 @@ class AgentsTest {
         for (r in listOf("root", "delegate", "finish", "agent", "thought", "task", "answer")) assertTrue(Orchestrator.GRAMMAR.contains("$r ::="), r)
         assertTrue(Specialists.MESSAGES_GRAMMAR.contains("send ::="))
         assertTrue(Agent.GRAMMAR.contains("multistep ::="))
+        assertTrue(Orchestrator.GRAMMAR.contains("\"\\\"files\\\"\""))
+        assertEquals(
+            PlannerDecision.Delegate("", AgentKind.FILES, "docx: report"),
+            Orchestrator.parse("""{"thought":"","agent":"files","task":"docx: report"}"""),
+        )
     }
 
     /** -Dhy.dumpGrammars=<dir> writes every grammar so the native host test can validate them with llama.cpp. */

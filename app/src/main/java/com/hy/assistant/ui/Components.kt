@@ -26,6 +26,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hy.assistant.AssistantOutput
+import com.hy.assistant.core.ExportFormat
+import com.hy.assistant.tools.SavedFile
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.hy.assistant.core.Web
 import androidx.compose.foundation.clickable
 import com.hy.assistant.Disambiguation
@@ -45,7 +54,12 @@ fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
 }
 
 @Composable
-fun OutputCard(output: AssistantOutput, onDismiss: () -> Unit, onOpenLink: ((String) -> Unit)? = null) {
+fun OutputCard(
+    output: AssistantOutput,
+    onDismiss: () -> Unit,
+    onOpenLink: ((String) -> Unit)? = null,
+    onSave: ((ExportFormat) -> Unit)? = null,
+) {
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(output.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -73,7 +87,10 @@ fun OutputCard(output: AssistantOutput, onDismiss: () -> Unit, onOpenLink: ((Str
                 )
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            if (onSave != null && !output.running && output.text.isNotBlank()) {
+                Box(Modifier.weight(1f)) { SaveRow(onSave) }
+            }
             TextButton(onClick = onDismiss) { Text(if (output.running) "Stop" else "Close") }
         }
     }
@@ -135,6 +152,41 @@ fun DisambiguationCard(d: Disambiguation, onPick: (Chat) -> Unit, onDismiss: () 
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    }
+}
+
+/** "Save as…" → .md / .csv / .docx / .txt */
+@Composable
+fun SaveRow(onSave: (ExportFormat) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    if (!open) {
+        TextButton(onClick = { open = true }) { Text("Save as…", style = MaterialTheme.typography.labelMedium) }
+    } else {
+        Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            ExportFormat.entries.forEach { f ->
+                AssistChip(
+                    onClick = { open = false; onSave(f) },
+                    label = { Text(".${f.ext}") },
+                    modifier = Modifier.padding(end = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+/** The file just saved, with Open / Share. */
+@Composable
+fun SavedFileBar(file: SavedFile, onOpen: () -> Unit, onShare: () -> Unit, onDismiss: () -> Unit) {
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("📄 ${file.name}", style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                Text("Saved in Downloads/Hy", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = onOpen) { Text("Open") }
+            TextButton(onClick = onShare) { Text("Share") }
+            TextButton(onClick = onDismiss) { Text("✕") }
         }
     }
 }

@@ -32,6 +32,7 @@ import com.hy.assistant.agents.AgentRun
 import com.hy.assistant.agents.AgentStepUi
 import com.hy.assistant.agents.Approval
 import com.hy.assistant.agents.StepStatus
+import com.hy.assistant.tools.SavedFile
 
 /** Live view of a multi-step agent run: each step, its specialist, and any approval it's waiting on. */
 @Composable
@@ -41,6 +42,8 @@ fun AgentCard(
     onSkip: () -> Unit,
     onStop: () -> Unit,
     onClose: () -> Unit,
+    onOpenFile: (SavedFile) -> Unit,
+    onShareFile: (SavedFile) -> Unit,
 ) {
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -55,6 +58,13 @@ fun AgentCard(
 
         run.approval?.let { a -> ApprovalBox(a, onApprove, onSkip) }
 
+        run.files.forEach { f ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("📄 ${f.name}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
+                TextButton(onClick = { onOpenFile(f) }) { Text("Open") }
+                TextButton(onClick = { onShareFile(f) }) { Text("Share") }
+            }
+        }
         run.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         if (!run.running && run.answer != null) {
             Text("Done — answer is in the conversation.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)

@@ -143,7 +143,7 @@ fun BrowserScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () -> 
             )
             output?.let { o ->
                 Column(Modifier.padding(horizontal = 8.dp)) {
-                    OutputCard(o, vm::dismissOutput, onOpenLink = { load(it) })
+                    OutputCard(o, vm::dismissOutput, onOpenLink = { load(it) }, onSave = { f -> vm.exportText(o.text, o.title, f) })
                 }
             }
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -11,6 +11,10 @@ import com.hy.assistant.core.Memory
 import com.hy.assistant.core.MemoryFact
 import com.hy.assistant.core.Turn
 import com.hy.assistant.agents.AgentRunner
+import com.hy.assistant.core.Export
+import com.hy.assistant.core.ExportFormat
+import com.hy.assistant.tools.FileSaver
+import com.hy.assistant.tools.SavedFile
 import com.hy.assistant.memory.ConversationStore
 import com.hy.assistant.memory.MemoryStore
 import com.hy.assistant.core.CommandParser
@@ -187,6 +191,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun history(maxChars: Int) = Conversation.historyBlock(ConversationStore.turns.value, maxChars)
     private fun memory() = MemoryStore.promptBlock(if (big) 800 else 400)
 
+    // ---- Files (.md / .csv / .docx / .txt) ---------------------------------------------------
+
+    /** The file saved most recently (shown with Open / Share). */
+    private val _savedFile = MutableStateFlow<SavedFile?>(null)
+    val savedFile: StateFlow<SavedFile?> = _savedFile.asStateFlow()
+
+    fun exportText(text: String, title: String, format: ExportFormat) {
+        viewModelScope.launch { saveFile(text, title, format) }
+    }
+
+    private suspend fun saveFile(text: String, title: String, format: ExportFormat): SavedFile? = try {
+        withContext(Dispatchers.IO) { FileSaver.save(app, text, title, format) }.also {
+            _savedFile.value = it
+            _messages.tryEmit("Saved to ${it.location}")
+        }
+    } catch (e: Exception) {
+        _messages.tryEmit("Couldn't save the file: ${e.message}")
+        null
+    }
+
+    /** "make a CSV of …" → tell the model how to lay it out. */
+    private fun withFormatHint(request: String): String =
+        Export.requestedFormat(request)?.let { request + Export.promptHint(it) } ?: request
+
+    /** After an answer finishes, save it if the request asked for a file format. */
+    private suspend fun autoExport(request: String) {
+        val format = Export.requestedFormat(request) ?: return
+        val o = _output.value ?: return
+        if (o.running || o.error != null || o.text.isBlank()) return
+        saveFile(o.text, request, format)
+    }
+
+    fun openSaved(file: SavedFile) {
+        if (!FileSaver.open(app, file)) _messages.tryEmit("No app on this phone opens .${file.format.ext} files. Use Share → Google Drive/Docs.")
+    }
+
+    fun shareSaved(file: SavedFile) = FileSaver.share(app, file)
+
+    fun dismissSaved() {
+        _savedFile.value = null
+    }
+
     // ---- Multi-step agents --------------------------------------------------------------
 
     val agents = AgentRunner(app, settings) { prompt ->
@@ -218,8 +264,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         job = viewModelScope.launch {
             try {
-                val answer = agents.execute(goal, ctx, viewModelScope)
+                val answer = agents.execute(goal + (Export.requestedFormat(goal)?.let { " (Save the result with the files agent.)" } ?: ""), ctx, viewModelScope)
                 _output.value = AssistantOutput("Agent", answer, running = false, links = agents.run.value?.links.orEmpty())
+                val made = agents.run.value?.files.orEmpty()
+                if (made.isNotEmpty()) _savedFile.value = made.last() else autoExport(goal)
             } catch (e: CancellationException) {
                 pendingTurn = null
                 throw e
@@ -335,8 +383,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun execute(action: AgentAction, request: String) {
         when (action) {
-            AgentAction.Answer -> launchTask("Hy") { answerWithSearchFallback("Hy", request, buildContext()) }
-            is AgentAction.Search -> launchTask("Searching…") { searchAndAnswer(request, action.query) }
+            AgentAction.Answer -> launchTask("Hy") {
+                answerWithSearchFallback("Hy", withFormatHint(request), buildContext())
+                autoExport(request)
+            }
+            is AgentAction.Search -> launchTask("Searching…") {
+                searchAndAnswer(withFormatHint(request), action.query)
+                autoExport(request)
+            }
             is AgentAction.Browse -> {
                 _output.value = null
                 val url = Web.browseUrl(action.target)

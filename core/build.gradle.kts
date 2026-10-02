@@ -21,5 +21,6 @@ tasks.test {
     useJUnitPlatform()
     System.getProperty("hy.bingHtml")?.let { systemProperty("hy.bingHtml", it) }
     System.getProperty("hy.dumpGrammars")?.let { systemProperty("hy.dumpGrammars", it) }
+    System.getProperty("hy.docxOut")?.let { systemProperty("hy.docxOut", it) }
     testLogging { showStandardStreams = true }
 }

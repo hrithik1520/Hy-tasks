@@ -42,6 +42,11 @@ What it does:
   running any command. Start with "Agent mode", "agent: …", or just ask
   ("find today's gold price and send it to dad"). The engine reuses its cache between steps,
   so each step only processes the new part.
+- **Files: .md, .csv, .docx, .txt**: every answer has **Save as…**, and asking for a format saves it
+  automatically ("make a CSV of my unread chats", "write a leave letter as a Word file",
+  "agent: compare 3 phones and give me an excel file"). Files go to **Downloads/Hy**, with
+  **Open** and **Share** buttons. Word files are built on the phone, with no internet.
+  CSV cells that look like formulas are neutralised.
 - **Two reply modes** (switch on the home screen, or per chat):
   - **Manual**: every new message gets a drafted reply in a notification. Tap **Send**
     right from the notification shade, or **Reply** to type your own.

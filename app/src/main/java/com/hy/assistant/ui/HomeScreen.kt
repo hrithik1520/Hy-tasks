@@ -95,6 +95,7 @@ fun HomeScreen(
     var showAllTurns by rememberSaveable { mutableStateOf(false) }
     val agentRun by vm.agentRun.collectAsState()
     val agentMode by vm.agentMode.collectAsState()
+    val savedFile by vm.savedFile.collectAsState()
     var showAllFeed by rememberSaveable { mutableStateOf(false) }
     var askedNotify by rememberSaveable { mutableStateOf(false) }
 
@@ -239,6 +240,7 @@ fun HomeScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Bubble(t.user, fromUser = true)
                             Bubble(t.assistant, fromUser = false)
+                            SaveRow { f -> vm.exportText(t.assistant, t.user, f) }
                             // Sources of the latest web answer stay tappable.
                             val links = if (isLast && threaded != null && threaded === output) output?.links.orEmpty() else emptyList()
                             links.forEach { link ->
@@ -257,14 +259,19 @@ fun HomeScreen(
             }
 
             agentRun?.let { r ->
-                item { AgentCard(r, vm.agents::approve, vm.agents::skip, vm::stopAgent, vm::closeAgent) }
+                item { AgentCard(r, vm.agents::approve, vm.agents::skip, vm::stopAgent, vm::closeAgent, vm::openSaved, vm::shareSaved) }
+            }
+            savedFile?.let { f ->
+                item { SavedFileBar(f, { vm.openSaved(f) }, { vm.shareSaved(f) }, vm::dismissSaved) }
             }
             disambiguation?.let { d -> item { DisambiguationCard(d, vm::chooseCandidate, vm::dismissDisambiguation) } }
             proposal?.let { p ->
                 item { ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal) }
             }
             // A finished answer already appears in the conversation; only show the card while working.
-            output?.takeIf { it !== threaded }?.let { o -> item { OutputCard(o, vm::dismissOutput, onOpenLink = vm::openInBrowser) } }
+            output?.takeIf { it !== threaded }?.let { o ->
+                item { OutputCard(o, vm::dismissOutput, onOpenLink = vm::openInBrowser, onSave = { f -> vm.exportText(o.text, o.title, f) }) }
+            }
 
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {

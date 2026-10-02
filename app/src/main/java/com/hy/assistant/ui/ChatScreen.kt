@@ -140,7 +140,7 @@ fun ChatScreen(vm: MainViewModel, chatKey: String, snackbar: SnackbarHostState, 
                 proposal?.takeIf { it.chatKey == chatKey }?.let { p ->
                     ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal)
                 }
-                output?.let { OutputCard(it, vm::dismissOutput) }
+                output?.let { o -> OutputCard(o, vm::dismissOutput, onSave = { f -> vm.exportText(o.text, o.title, f) }) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = question,

@@ -22,6 +22,10 @@ import com.hy.assistant.core.Memory
 import com.hy.assistant.notifications.Chat
 import com.hy.assistant.notifications.MessageStore
 import com.hy.assistant.notifications.ReplySender
+import com.hy.assistant.core.Export
+import com.hy.assistant.core.ExportFormat
+import com.hy.assistant.tools.FileSaver
+import com.hy.assistant.tools.SavedFile
 import com.hy.assistant.tools.Terminal
 import com.hy.assistant.tools.TerminalBackend
 import com.hy.assistant.tools.WebSearch
@@ -67,6 +71,8 @@ data class AgentRun(
     val answer: String? = null,
     val error: String? = null,
     val links: List<SearchResult> = emptyList(),
+    /** Files the Files agent created during this run. */
+    val files: List<SavedFile> = emptyList(),
 )
 
 /**
@@ -117,7 +123,7 @@ class AgentRunner(
                     is PlannerDecision.Delegate -> {
                         updateLastStep { it.copy(agent = decision.agent, thought = decision.thought, task = decision.task, status = StepStatus.WORKING) }
                         val (observation, status) = try {
-                            runSpecialist(decision.agent, decision.task, scope)
+                            runSpecialist(decision.agent, decision.task, scope, records)
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -150,7 +156,13 @@ class AgentRunner(
 
     // ---- Specialists -----------------------------------------------------------------------
 
-    private suspend fun runSpecialist(agent: AgentKind, task: String, scope: CoroutineScope): Pair<String, StepStatus> = when (agent) {
+    private suspend fun runSpecialist(
+        agent: AgentKind,
+        task: String,
+        scope: CoroutineScope,
+        records: List<AgentStepRecord>,
+    ): Pair<String, StepStatus> = when (agent) {
+        AgentKind.FILES -> files(task, records)
         AgentKind.RESEARCH -> research(task)
         AgentKind.BROWSER -> browse(task)
         AgentKind.MESSAGES -> messages(task)
@@ -234,6 +246,17 @@ class AgentRunner(
         } ?: return "$ $approved\n(no result within 75 s)" to StepStatus.FAILED
         val status = if (entry.exitCode == 0) StepStatus.DONE else StepStatus.FAILED
         return "$ $approved\nexit ${entry.exitCode}\n${entry.output.trim().takeLast(550)}" to status
+    }
+
+    private suspend fun files(task: String, records: List<AgentStepRecord>): Pair<String, StepStatus> {
+        val format = Export.requestedFormat(task) ?: ExportFormat.MD
+        val gathered = records.joinToString("\n\n") { "[${it.agent.id}] ${it.task}\n${it.observation}" }
+        val content = complete(Specialists.filePrompt(task, gathered)).trim()
+        if (content.isBlank()) return "Nothing to write." to StepStatus.FAILED
+        val title = task.substringAfter(':', task).trim().ifBlank { "hy-file" }
+        val file = withContext(Dispatchers.IO) { FileSaver.save(context, content, title, format) }
+        _run.update { it?.copy(files = it.files + file) }
+        return "Saved ${format.label} file: ${file.location}" to StepStatus.DONE
     }
 
     private fun memory(task: String): Pair<String, StepStatus> = when (val op = Specialists.parseMemoryTask(task)) {
