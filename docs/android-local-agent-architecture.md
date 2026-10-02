@@ -286,3 +286,18 @@ service — the OS will kill it and it drains battery.
   GGUF header check, idle unload after 5 min
 - Deferred: F3 reminders, F4 call/SMS intents, F5 voice, JSON-schema constrained output
   (v1 only asks the model for plain text, so grammar constraints aren't needed yet)
+
+## 13. Evaluation results (2 Oct 2026, desktop CPU, 6 threads)
+
+32 cases from `EvalCases.kt` (25 commands, 4 agent first steps, 3 free-text replies), greedy decoding.
+
+| Model | Correct | Avg time/case | KV-cache reuse | Notes |
+|---|---|---|---|---|
+| Qwen2.5 1.5B Q4_K_M (default) | 29/32 | 1.5 s | yes | ~0.85 s per command once the router prompt is cached |
+| Qwen3.5 2B Q4_K_M | 31/32 | 7.1 s | no (hybrid model) | best planner; needs the empty `<think>` block to stop thinking |
+| Qwen3.5 0.8B Q4_K_M | 28/32 | 4.0 s | no (hybrid model) | |
+
+Fixes found by the evaluation: clearer router examples (26→29 for Qwen2.5), research vs terminal
+roles for the orchestrator (3/4→4/4), thinking disabled for Qwen3-family templates, a dedicated
+KV slot for the router (cold 6.2 s → warm 0.85 s), and native test checks that actually run in
+Release builds (`CHECK` instead of `assert`).

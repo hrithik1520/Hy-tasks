@@ -66,7 +66,9 @@ class MemoryTest {
         assertTrue(p.user.endsWith("Request: and tomorrow?"))
         val r = Agent.routePrompt("reply to him saying ok", listOf("Rahul"), history = "User: summarize Rahul\nHy: He wants to meet")
         assertTrue(r.user.contains("He wants to meet") && r.user.endsWith("New request: reply to him saying ok"))
-        assertEquals("reply to him", Agent.routePrompt("reply to him", emptyList()).user)
+        assertTrue(Agent.routePrompt("reply to him", emptyList()).user.endsWith("Request: reply to him"))
+        // The system prompt must not depend on chats or history, or the router's KV cache breaks.
+        assertEquals(Agent.routePrompt("a", listOf("X")).system, Agent.routePrompt("b", listOf("Y", "Z"), "User: hi\nHy: hello").system)
         assertEquals(AgentAction.Remember("I'm vegetarian"), Agent.parse("""{"action":"remember","fact":"I'm vegetarian"}"""))
         assertTrue(Agent.GRAMMAR.contains("remember ::="))
     }

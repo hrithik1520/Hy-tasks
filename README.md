@@ -83,6 +83,13 @@ What it does:
 
 Updates: install the newer `HyAssistant.apk` over the old one. Your data and model are kept.
 
+- **Share → Hy** from any app (text or links): Summarize, Explain simply, Key facts,
+  "Is it true?", Reply ideas, or ask anything about it.
+- **Quick Settings tile**: switch Manual/Auto from the notification shade (edit tiles → "Hy auto-reply").
+- **Morning briefing** (optional): a daily notification at your chosen time with unread chats and
+  important payments, deliveries and reminders.
+- **Speed test** in Models: times a command, a cached command and a reply on *your* phone.
+
 ## How it works (and its limits)
 
 WhatsApp has no public API, so Hy reads **WhatsApp notifications** (Android's
@@ -110,6 +117,22 @@ The model only writes text. It never picks recipients or triggers actions.
 | `tools/hosttest/` | Desktop build of the native wrapper for testing without a phone |
 | `docs/` | Architecture & plan |
 | `.github/workflows/build-apk.yml` | CI: tests, builds the signed APK, publishes a release |
+
+## Evaluating models
+
+`core/src/test/.../EvalCases.kt` holds 32 real cases (commands, agent first steps, replies) built
+with the app's actual prompts and grammars. To score a GGUF model on a desktop:
+
+```bash
+scripts/fetch-llama.sh
+cmake -S tools/hosttest -B build-host -DCMAKE_BUILD_TYPE=Release && cmake --build build-host -j4
+HY_CORE_ONLY=1 ./gradlew :core:test -Dhy.evalOut=$PWD/cases.jsonl
+build-host/hosttest model.gguf --eval cases.jsonl > results.jsonl
+tools/eval/score.py results.jsonl
+```
+
+`build-host/hosttest model.gguf` runs the native checks (KV-cache reuse, grammar), and
+`--logits-check` proves cached and fresh decoding give the same scores.
 
 ## Building
 

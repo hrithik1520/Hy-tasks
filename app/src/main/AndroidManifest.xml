@@ -40,6 +40,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- "Share → Hy" from any app: text or links. -->
+            <intent-filter android:label="Ask Hy">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <service
@@ -65,6 +71,18 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Quick Settings tile: Manual / Auto reply mode. -->
+        <service
+            android:name=".auto.ModeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_hy"
+            android:label="Hy auto-reply"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- Termux sends command results back through our own PendingIntent. -->
         <receiver

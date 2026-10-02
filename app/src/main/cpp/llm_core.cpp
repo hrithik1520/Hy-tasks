@@ -9,7 +9,7 @@ namespace hy {
 
 namespace {
 thread_local std::string g_last_error;
-int g_last_reused[kSlots] = {0, 0};
+int g_last_reused[kSlots] = {};
 constexpr int kBatch = 512;
 
 void set_error(const std::string &msg) { g_last_error = msg; }
@@ -84,7 +84,13 @@ std::string format_chat(llama_model *model, const std::string &system, const std
             buf.resize(n);
             n = llama_chat_apply_template(tmpl, msgs, 2, true, buf.data(), (int32_t)buf.size());
         }
-        if (n > 0) return std::string(buf.data(), n);
+        if (n > 0) {
+            std::string out(buf.data(), n);
+            // Reasoning models (Qwen3 family) think out loud unless the turn starts with an empty
+            // think block; their own template adds it when enable_thinking is false.
+            if (std::string(tmpl).find("enable_thinking") != std::string::npos) out += "<think>\n\n</think>\n\n";
+            return out;
+        }
     }
     // Fallback: ChatML (Qwen and many others).
     return "<|im_start|>system\n" + system + "<|im_end|>\n<|im_start|>user\n" + user +

@@ -133,7 +133,7 @@ object Terminal {
             .putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0")
             .putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", pending)
         try {
-            if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent) else context.startService(intent)
+            context.startForegroundService(intent)
         } catch (e: Exception) {
             finish(entry.id, "Couldn't reach Termux: ${e.message}\n$TERMUX_SETUP", -1)
         }

@@ -33,7 +33,7 @@ struct Session {
     std::vector<int> cached;  // tokens whose KV is in ctx (sequence 0)
 };
 
-constexpr int kSlots = 2;  // 0 = general, 1 = agent orchestrator
+constexpr int kSlots = 3;  // 0 = general, 1 = agent orchestrator, 2 = command router
 
 struct Engine {
     llama_model *model = nullptr;

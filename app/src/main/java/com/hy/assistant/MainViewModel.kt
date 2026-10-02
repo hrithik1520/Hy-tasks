@@ -5,7 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hy.assistant.core.Agent
 import com.hy.assistant.core.AgentAction
+import com.hy.assistant.core.ChatLine
 import com.hy.assistant.core.Command
+import com.hy.assistant.core.Humanizer
 import com.hy.assistant.core.Conversation
 import com.hy.assistant.core.Memory
 import com.hy.assistant.core.MemoryFact
@@ -191,6 +193,94 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val big get() = settings.current.contextSize >= 4096
     private fun history(maxChars: Int) = Conversation.historyBlock(ConversationStore.turns.value, maxChars)
     private fun memory() = MemoryStore.promptBlock(if (big) 800 else 400)
+
+    // ---- Speed test (Models screen) -----------------------------------------------------------
+
+    private val _speed = MutableStateFlow<String?>(null)
+    val speed: StateFlow<String?> = _speed.asStateFlow()
+
+    /** Times a command (first + cached), a WhatsApp reply and an agent step on this phone. */
+    fun runSpeedTest() {
+        val model = models.activeModelFile() ?: run { _speed.value = NO_MODEL; return }
+        val s = settings.current
+        viewModelScope.launch {
+            suspend fun time(p: Prompt): Long {
+                val t0 = System.currentTimeMillis()
+                engine.complete(model, p, s.threads, s.contextSize)
+                return System.currentTimeMillis() - t0
+            }
+            try {
+                _speed.value = "Loading ${model.name}…"
+                val load = time(Prompt("Hi", "Say OK", 2, 0f))
+                _speed.value = "Testing commands…"
+                val names = chats.value.map { it.name }.ifEmpty { listOf("Rahul", "Mom") }
+                val cold = time(Agent.routePrompt("tell mom I'll be late", names).copy(cacheSlot = 0))
+                time(Agent.routePrompt("what did I miss", names)) // warm the router slot
+                val warm = time(Agent.routePrompt("text rahul happy birthday", names))
+                _speed.value = "Testing a reply…"
+                val reply = time(
+                    Prompts.draftReply("Rahul", listOf(ChatLine("Rahul", "are you coming tonight?", 1, false)), s.userName, s.tone, styleRules = Humanizer.PROMPT_RULES),
+                )
+                fun sec(ms: Long) = "%.1f s".format(ms / 1000.0)
+                _speed.value = "${model.name}\n" +
+                    "• Load + first word: ${sec(load)}\n" +
+                    "• Command, first time: ${sec(cold)}\n" +
+                    "• Command, after that: ${sec(warm)}\n" +
+                    "• WhatsApp reply draft: ${sec(reply)}\n" +
+                    "Agent steps take roughly 1-2 commands each."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _speed.value = "Speed test failed: ${e.message}"
+            }
+        }
+    }
+
+    // ---- Shared from other apps ("Share → Hy") ------------------------------------------
+
+    data class Shared(val text: String, val subject: String?) {
+        /** A bare link: Hy reads the page instead of the link text. */
+        val url: String? get() = text.trim().takeIf { Regex("""^https?://\S+$""").matches(it) }
+        val label: String get() = subject?.takeIf { it.isNotBlank() } ?: url?.let { Web.host(it) } ?: text.take(60)
+    }
+
+    private val _shared = MutableStateFlow<Shared?>(null)
+    val shared: StateFlow<Shared?> = _shared.asStateFlow()
+
+    fun onShared(text: String, subject: String?) {
+        _shared.value = Shared(text.trim(), subject)
+        _route.value = "home"
+    }
+
+    fun dismissShared() {
+        _shared.value = null
+    }
+
+    /** "Summarize", "Explain simply", or any question about the shared text/link. */
+    fun askAboutShared(task: String) {
+        val sh = _shared.value ?: return
+        if (task.isBlank()) return
+        if (models.activeModelFile() == null) {
+            _output.value = AssistantOutput("Shared", "", false, error = NO_MODEL)
+            return
+        }
+        job?.cancel()
+        pendingTurn = "$task — ${sh.label}"
+        launchTask(sh.label) {
+            val content = sh.url?.let { url ->
+                _output.value = AssistantOutput(sh.label, "Reading the page…", running = true)
+                withContext(Dispatchers.IO) { runCatching { Web.htmlToText(com.hy.assistant.tools.WebSearch.get(url), 6000) }.getOrNull() }
+                    ?.takeIf { it.length > 80 } ?: throw IllegalStateException("Couldn't read that page (it may need JavaScript). Open it in Hy's browser and use \"Ask about this page\".")
+            } ?: sh.text
+            val budget = if (big) 7000 else 3000
+            val ctx = "## Shared ${if (sh.url != null) "web page: ${sh.url}" else "text"}" +
+                (sh.subject?.let { " ($it)" } ?: "") + "\n" + content.take(budget)
+            // Shared content is untrusted: answer text only, no actions.
+            val text = streamToOutput(sh.label, Agent.answerPrompt(withFormatHint(task), ctx, settings.current.userName))
+            _output.value = AssistantOutput(sh.label, text, running = false)
+            autoExport(task)
+        }
+    }
 
     // ---- Files (.md / .csv / .docx / .txt) ---------------------------------------------------
 

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.hy.assistant.MainViewModel
 import com.hy.assistant.core.Tone
 import com.hy.assistant.auto.ActivityLog
+import com.hy.assistant.auto.BriefingWorker
 import com.hy.assistant.memory.MemoryStore
 import com.hy.assistant.tools.SearchEngine
 import com.hy.assistant.notifications.MessageStore
@@ -44,6 +45,7 @@ import com.hy.assistant.notifications.NotificationFeed
 fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () -> Unit) {
     val s by vm.settings.data.collectAsState()
     val facts by vm.memoryFacts.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Scaffold(
         topBar = {
@@ -116,10 +118,10 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                         FilterChip(selected = s.autoCooldownMin == m, onClick = { vm.settings.update { it.copy(autoCooldownMin = m) } }, label = { Text("$m min") })
                     }
                 }
-                ToggleRow("Auto-reply in group chats", "Off by default — group replies are easy to get wrong.", s.autoReplyGroups) { v ->
+                ToggleRow("Include group chats", "Suggestions and auto-replies in groups. Off by default (busy groups = lots of drafts). Per-chat Auto/Manual still works.", s.autoReplyGroups) { v ->
                     vm.settings.update { it.copy(autoReplyGroups = v) }
                 }
-                ToggleRow("Auto-reply in other messengers", "Telegram, Messages, etc. (WhatsApp is always included).", s.autoReplyOtherApps) { v ->
+                ToggleRow("Include other messengers", "Telegram, Messages, etc. (WhatsApp is always included). Bank/OTP senders are always skipped.", s.autoReplyOtherApps) { v ->
                     vm.settings.update { it.copy(autoReplyOtherApps = v) }
                 }
                 ToggleRow("Add \"— sent by my assistant\"", "Lets people know an auto-reply wasn't typed by you.", s.appendSignature) { v ->
@@ -195,6 +197,25 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+
+            SectionCard {
+                Text("Daily briefing", style = MaterialTheme.typography.titleSmall)
+                ToggleRow("Morning briefing", "A daily notification with your unread chats and important payments, deliveries and reminders.", s.briefingEnabled) { v ->
+                    vm.settings.update { it.copy(briefingEnabled = v) }
+                    BriefingWorker.schedule(context, v, s.briefingHour)
+                }
+                if (s.briefingEnabled) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(6, 7, 8, 9, 21).forEach { h ->
+                            FilterChip(
+                                selected = s.briefingHour == h,
+                                onClick = { vm.settings.update { it.copy(briefingHour = h) }; BriefingWorker.schedule(context, true, h) },
+                                label = { Text(if (h < 12) "$h AM" else "${h - 12} PM") },
+                            )
+                        }
+                    }
+                }
             }
 
             SectionCard {

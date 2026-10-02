@@ -120,11 +120,17 @@ object Prompts {
 }
 
 object TextCleanup {
+    /** Removes "<think>…</think>" reasoning (and an unfinished one) that reasoning models may emit. */
+    fun stripThinking(raw: String): String =
+        raw.replace(Regex("""<think>.*?</think>""", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("""<think>.*""", RegexOption.DOT_MATCHES_ALL), "")
+            .trim()
+
     private val prefixes = Regex("""^(?:reply|response|message|draft|me|answer)\s*:\s*""", RegexOption.IGNORE_CASE)
 
     /** Strips wrapping quotes and "Reply:"-style labels that small models like to add. */
     fun cleanReply(raw: String): String {
-        var s = raw.trim()
+        var s = stripThinking(raw).trim()
         s = prefixes.replace(s, "")
         val quotes = listOf('"' to '"', '“' to '”', '\'' to '\'')
         for ((open, close) in quotes) {

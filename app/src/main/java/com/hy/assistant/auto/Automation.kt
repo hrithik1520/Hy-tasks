@@ -3,11 +3,11 @@ package com.hy.assistant.auto
 import android.content.Context
 import android.os.PowerManager
 import android.util.Log
-import com.hy.assistant.ChatMode
 import com.hy.assistant.ReplyMode
 import com.hy.assistant.Settings
+import com.hy.assistant.core.AutoDecision
+import com.hy.assistant.core.AutomationPolicy
 import com.hy.assistant.core.Prompts
-import com.hy.assistant.core.SafetyFilter
 import com.hy.assistant.llm.LlamaEngine
 import com.hy.assistant.models.ModelManager
 import com.hy.assistant.notifications.Chat
@@ -63,22 +63,30 @@ class Automation(
     private suspend fun process(chatKey: String) {
         val s = settings.current
         val chat = MessageStore.chat(chatKey) ?: return
-        val chatMode = s.modeFor(chatKey)
-        if (chatMode == ChatMode.OFF) return
         val last = chat.messages.lastOrNull() ?: return
         if (last.fromMe) return // already answered
-
-        val wantAuto = when (chatMode) {
-            ChatMode.AUTO -> true
-            ChatMode.MANUAL -> false
-            else -> s.replyMode == ReplyMode.AUTO
-        }
-        if (!wantAuto && !s.proactiveSuggestions) return
-        val model = models.activeModelFile() ?: return
-
         val pendingIncoming = chat.messages.takeLastWhile { !it.fromMe }
-        val holdReason = if (wantAuto) autoBlockReason(chat, chatMode, pendingIncoming.map { it.text }) else null
-        val sendAutomatically = wantAuto && holdReason == null
+
+        val decision = AutomationPolicy.decide(
+            AutomationPolicy.Input(
+                chatName = chat.name,
+                isWhatsApp = chat.isWhatsApp,
+                isGroup = chat.isGroup,
+                canReply = chat.canReply,
+                incoming = pendingIncoming.map { it.text },
+                chatSetting = AutomationPolicy.ChatSetting.valueOf(s.modeFor(chatKey).name),
+                globalAuto = s.replyMode == ReplyMode.AUTO,
+                proactiveSuggestions = s.proactiveSuggestions,
+                includeGroups = s.autoReplyGroups,
+                includeOtherApps = s.autoReplyOtherApps,
+                inCooldown = System.currentTimeMillis() - (lastAutoAt[chat.key] ?: 0L) < s.autoCooldownMin * 60_000L,
+                dailyLimitReached = ActivityLog.autoSentToday() >= DAILY_AUTO_LIMIT,
+            ),
+        )
+        if (decision == AutoDecision.None) return
+        val model = models.activeModelFile() ?: return
+        val sendAutomatically = decision == AutoDecision.Auto
+        val holdReason = (decision as? AutoDecision.Hold)?.reason
 
         val prompt = if (sendAutomatically) {
             Prompts.autoReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, ReplyStyle.promptRules(chat, s))
@@ -100,20 +108,6 @@ class Automation(
             HyNotifications.suggestion(context, chat.key, chat.name, incoming, text, holdReason)
             ActivityLog.add(if (holdReason != null) ActivityLog.Kind.HELD else ActivityLog.Kind.SUGGESTED, chat.name, text, holdReason)
         }
-    }
-
-    /** Why this chat must not be auto-answered right now (null = OK to auto-send). */
-    private fun autoBlockReason(chat: Chat, chatMode: ChatMode, incoming: List<String>): String? {
-        val s = settings.current
-        val explicit = chatMode == ChatMode.AUTO
-        incoming.firstNotNullOfOrNull { SafetyFilter.blockReason(it) }?.let { return it.label }
-        if (!chat.canReply) return "no direct reply available"
-        if (chat.isGroup && !s.autoReplyGroups && !explicit) return "group chat"
-        if (!chat.isWhatsApp && !s.autoReplyOtherApps && !explicit) return "${chat.appName} chat"
-        val since = System.currentTimeMillis() - (lastAutoAt[chat.key] ?: 0L)
-        if (since < s.autoCooldownMin * 60_000L) return "already auto-replied recently"
-        if (ActivityLog.autoSentToday() >= DAILY_AUTO_LIMIT) return "daily auto-reply limit reached"
-        return null
     }
 
     private fun scheduleAutoSend(chat: Chat, text: String, delaySec: Int) {

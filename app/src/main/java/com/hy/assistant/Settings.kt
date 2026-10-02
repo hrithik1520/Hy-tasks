@@ -46,6 +46,8 @@ data class SettingsData(
     val searchEngine: SearchEngine = SearchEngine.BING,
     /** Make WhatsApp replies read like a person texting (humanizer rules + voice matching). */
     val humanizeReplies: Boolean = true,
+    val briefingEnabled: Boolean = false,
+    val briefingHour: Int = 8,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -88,6 +90,8 @@ class Settings(context: Context) {
                 .getOrDefault(d.terminalBackend),
             agentMaxSteps = prefs.getInt("agentMaxSteps", d.agentMaxSteps),
             humanizeReplies = prefs.getBoolean("humanizeReplies", d.humanizeReplies),
+            briefingEnabled = prefs.getBoolean("briefingEnabled", d.briefingEnabled),
+            briefingHour = prefs.getInt("briefingHour", d.briefingHour),
             searchEngine = runCatching { SearchEngine.valueOf(prefs.getString("searchEngine", d.searchEngine.name)!!) }.getOrDefault(d.searchEngine),
         )
     }
@@ -116,6 +120,8 @@ class Settings(context: Context) {
             .putInt("agentMaxSteps", d.agentMaxSteps)
             .putString("searchEngine", d.searchEngine.name)
             .putBoolean("humanizeReplies", d.humanizeReplies)
+            .putBoolean("briefingEnabled", d.briefingEnabled)
+            .putInt("briefingHour", d.briefingHour)
             .apply()
         _data.value = d
     }

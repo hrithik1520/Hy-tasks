@@ -19,6 +19,7 @@ import com.hy.assistant.R
 object HyNotifications {
     private const val CH_SUGGEST = "suggestions"
     private const val CH_AUTO = "auto_replies"
+    const val CH_BRIEFING = "briefing"
     const val KEY_TYPED_REPLY = "typed_reply"
 
     fun createChannels(context: Context) {
@@ -31,6 +32,11 @@ object HyNotifications {
         nm.createNotificationChannel(
             NotificationChannel(CH_AUTO, "Auto-replies", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Replies Hy sends for you in Auto mode"
+            },
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CH_BRIEFING, "Daily briefing", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Your morning summary of unread chats and important notifications"
             },
         )
     }
@@ -126,6 +132,11 @@ object HyNotifications {
         val input = RemoteInput.Builder(KEY_TYPED_REPLY).setLabel("Type your reply").build()
         return NotificationCompat.Action.Builder(0, "Reply", pi).addRemoteInput(input).setAllowGeneratedReplies(false).build()
     }
+
+    fun openAppIntent(context: Context): PendingIntent = PendingIntent.getActivity(
+        context, 7, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
 
     private fun openApp(context: Context, chatKey: String): PendingIntent {
         val i = Intent(context, MainActivity::class.java)

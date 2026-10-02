@@ -34,6 +34,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -96,6 +97,7 @@ fun HomeScreen(
     val agentRun by vm.agentRun.collectAsState()
     val agentMode by vm.agentMode.collectAsState()
     val savedFile by vm.savedFile.collectAsState()
+    val shared by vm.shared.collectAsState()
     var showAllFeed by rememberSaveable { mutableStateOf(false) }
     var askedNotify by rememberSaveable { mutableStateOf(false) }
 
@@ -221,6 +223,8 @@ fun HomeScreen(
                     }
                 }
             }
+
+            shared?.let { sh -> item { SharedCard(sh, vm::askAboutShared, vm::dismissShared) } }
 
             // ---- Conversation with Hy ---------------------------------------------------
             if (turns.isNotEmpty() || pendingRequest != null) {
@@ -360,6 +364,43 @@ fun HomeScreen(
                 }
             }
             item { Spacer(Modifier.padding(8.dp)) }
+        }
+    }
+}
+
+/** Text or a link shared to Hy from another app, with one-tap tasks. */
+@Composable
+private fun SharedCard(sh: MainViewModel.Shared, onAsk: (String) -> Unit, onDismiss: () -> Unit) {
+    var question by rememberSaveable(sh) { mutableStateOf("") }
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Shared with Hy", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = onDismiss) { Text("✕") }
+        }
+        Text(sh.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        if (sh.url == null) Text(sh.text, style = MaterialTheme.typography.bodySmall, maxLines = 3, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
+            listOf(
+                "Summarize" to "Summarize this in 5 short bullet points.",
+                "Explain simply" to "Explain this in simple words, like to a friend.",
+                "Key facts" to "List the key facts, numbers and dates.",
+                "Is it true?" to "Point out claims here that look doubtful or need checking.",
+                "Reply ideas" to "Suggest 3 short replies I could send about this.",
+            ).forEach { (label, task) ->
+                AssistChip(onClick = { onAsk(task) }, label = { Text(label) }, modifier = Modifier.padding(end = 6.dp))
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = question,
+                onValueChange = { question = it },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                placeholder = { Text("Ask anything about it…") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { onAsk(question); question = "" }),
+            )
+            IconButton(onClick = { onAsk(question); question = "" }) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Ask") }
         }
     }
 }

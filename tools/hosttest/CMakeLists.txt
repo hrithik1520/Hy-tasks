@@ -8,5 +8,5 @@ foreach(opt LLAMA_BUILD_COMMON LLAMA_BUILD_TESTS LLAMA_BUILD_TOOLS LLAMA_BUILD_E
 endforeach()
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../third_party/llama.cpp build-llama)
 add_executable(hosttest main.cpp ${CMAKE_CURRENT_LIST_DIR}/../../app/src/main/cpp/llm_core.cpp)
-target_include_directories(hosttest PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../../app/src/main/cpp)
+target_include_directories(hosttest PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../../app/src/main/cpp ${CMAKE_CURRENT_LIST_DIR}/../../third_party/llama.cpp/vendor)
 target_link_libraries(hosttest llama)

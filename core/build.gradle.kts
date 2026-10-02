@@ -22,5 +22,6 @@ tasks.test {
     System.getProperty("hy.bingHtml")?.let { systemProperty("hy.bingHtml", it) }
     System.getProperty("hy.dumpGrammars")?.let { systemProperty("hy.dumpGrammars", it) }
     System.getProperty("hy.docxOut")?.let { systemProperty("hy.docxOut", it) }
+    System.getProperty("hy.evalOut")?.let { systemProperty("hy.evalOut", it) }
     testLogging { showStandardStreams = true }
 }

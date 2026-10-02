@@ -9,12 +9,12 @@ val keystorePath: String? = System.getenv("HY_KEYSTORE_PATH")
 
 android {
     namespace = "com.hy.assistant"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.hy.assistant"
         minSdk = 29
-        targetSdk = 35
+        targetSdk = 36
         versionCode = (System.getenv("HY_VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("HY_VERSION_NAME") ?: "0.1.0-dev"
 
@@ -95,4 +95,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

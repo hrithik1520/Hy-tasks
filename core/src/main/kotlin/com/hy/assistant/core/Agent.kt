@@ -27,6 +27,8 @@ sealed interface AgentAction {
  * [GRAMMAR], so a small model can only ever produce one of the valid JSON shapes below.
  */
 object Agent {
+    const val ROUTER_CACHE_SLOT = 2
+
     /** GBNF: exactly one compact JSON object per action. */
     val GRAMMAR = """
         root ::= answer | digest | reply | draft | summarize | setmode | chatmode | search | browse | runcmd | remember | multistep
@@ -58,22 +60,25 @@ object Agent {
                 - summarize: summarize one chat.
                 - digest: catch-up of all unread messages and notifications.
                 - set_mode: switch auto-reply on ("auto") or off ("manual") for everything.
-                - set_chat_mode: auto / manual / off / default for one chat.
+                - set_chat_mode: auto / manual / off / default for ONE named chat (use this, not set_mode, whenever a chat is named).
                 - search: questions needing facts from the internet — news, prices, weather, sports, people, places, how-to, anything recent or uncertain. "query" is a short web search query.
                 - browse: open a website or a site search in the browser. "target" is a URL or "<site> <what to search>".
                 - run_command: user wants to run a terminal/shell command (Termux or Android shell). "command" is one shell command.
                 - remember: the user tells you a lasting fact or preference to keep (about them, people, plans). "fact" restates it.
                 - agent: the request needs SEVERAL steps or tools combined (look something up AND message someone, check something then act on it, compare several things).
                 - answer: anything else — questions about messages or notifications, writing, explaining, lists, math, ideas, advice.
-                Known chats: $names
                 Examples:
                 "tell mom I'll be late for dinner" -> {"action":"reply","contact":"mom","message":"I'll be late for dinner"}
                 "text rahul happy birthday bro" -> {"action":"reply","contact":"rahul","message":"Happy birthday bro!"}
+                "let rahul know i'm stuck in traffic" -> {"action":"reply","contact":"rahul","message":"I'm stuck in traffic"}
                 "what should I say to priya" -> {"action":"draft_reply","contact":"priya"}
+                "how do i respond to mom" -> {"action":"draft_reply","contact":"mom"}
+                "what has rahul been saying" -> {"action":"summarize","contact":"rahul"}
                 "what's going on in the college group" -> {"action":"summarize","contact":"college group"}
                 "anything important today?" -> {"action":"digest"}
                 "stop auto replying" -> {"action":"set_mode","mode":"manual"}
                 "auto reply to my boss" -> {"action":"set_chat_mode","contact":"boss","mode":"auto"}
+                "don't auto reply in college gang" -> {"action":"set_chat_mode","contact":"college gang","mode":"off"}
                 "did anyone mention dinner?" -> {"action":"answer"}
                 "note that I'm vegetarian" -> {"action":"remember","fact":"I'm vegetarian"}
                 "find today's gold price and send it to dad" -> {"action":"agent"}
@@ -88,10 +93,13 @@ object Agent {
                 "write a leave application for tomorrow" -> {"action":"answer"}
                 "list my unread chats as a table" -> {"action":"answer"}
             """.trimIndent(),
-            user = recent + (if (recent.isEmpty()) "" else "\nNew request: ") + request,
+            // Everything that changes goes here, after the fixed system prompt (keeps the KV cache valid).
+            user = "Known chats: $names\n" + recent + (if (recent.isEmpty()) "Request: " else "\nNew request: ") + request,
             maxTokens = 120,
             temperature = 0f,
             grammar = GRAMMAR,
+            // Same long system prompt every time: its own KV slot means only the new request is read.
+            cacheSlot = ROUTER_CACHE_SLOT,
         )
     }
 

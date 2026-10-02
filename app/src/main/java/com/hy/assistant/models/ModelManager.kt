@@ -52,7 +52,7 @@ class ModelManager(
             fileName = "qwen2.5-1.5b-instruct-q4_k_m.gguf",
             url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
             sizeMb = 1120,
-            note = "Best balance on Nothing Phone (3a) Pro. Good summaries and replies.",
+            note = "Best balance on Nothing Phone (3a) Pro: fast, good replies, and agent steps reuse work (27/32 in Hy's tests).",
             license = "Apache 2.0",
         ),
         CatalogModel(
@@ -65,13 +65,13 @@ class ModelManager(
             license = "Apache 2.0",
         ),
         CatalogModel(
-            id = "qwen2.5-3b",
-            title = "Qwen2.5 3B Instruct (best quality)",
-            fileName = "qwen2.5-3b-instruct-q4_k_m.gguf",
-            url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
-            sizeMb = 2100,
-            note = "Better writing but ~2x slower and uses ~2.5 GB RAM.",
-            license = "Qwen Research License (personal / non-commercial)",
+            id = "qwen3.5-2b",
+            title = "Qwen3.5 2B (smartest)",
+            fileName = "Qwen3.5-2B-Q4_K_M.gguf",
+            url = "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf",
+            sizeMb = 1280,
+            note = "Newest model: best at commands and agent planning (31/32 in Hy's tests vs 27/32), but about 4-5x slower on phone CPUs.",
+            license = "Apache 2.0",
         ),
     )
 

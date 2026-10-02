@@ -48,6 +48,7 @@ fun ModelsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () -> U
     val installed by models.installed.collectAsState()
     val transfer by models.transfer.collectAsState()
     val settings by vm.settings.data.collectAsState()
+    val speed by vm.speed.collectAsState()
     var customUrl by rememberSaveable { mutableStateOf("") }
     val busy = transfer is TransferState.Downloading || transfer is TransferState.Importing
 
@@ -71,6 +72,18 @@ fun ModelsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () -> U
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item {
+                SectionCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Speed test", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                        OutlinedButton(onClick = vm::runSpeedTest, enabled = settings.activeModel != null) { Text("Run") }
+                    }
+                    Text(
+                        speed ?: "Times the selected model on this phone: a command, a cached command and a WhatsApp reply.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
             item {
                 Text(
                     "Models run fully on your phone with llama.cpp. Download once on Wi-Fi; after that everything works offline.",

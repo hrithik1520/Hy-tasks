@@ -38,5 +38,7 @@ class PromptsTest {
         assertEquals("See you soon!", TextCleanup.cleanReply("Reply: \"See you soon!\""))
         assertEquals("Ok", TextCleanup.cleanReply("  “Ok”  "))
         assertEquals("it's fine", TextCleanup.cleanReply("it's fine"))
+        assertEquals("On my way", TextCleanup.cleanReply("<think>\nThe user wants…\n</think>\n\nOn my way"))
+        assertEquals("", TextCleanup.stripThinking("<think>still thinking"))
     }
 }

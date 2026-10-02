@@ -2,9 +2,9 @@ package com.hy.assistant.core
 
 /** Specialist sub-agents the orchestrator can delegate to. Each has its own role prompt and tools. */
 enum class AgentKind(val id: String, val label: String, val role: String) {
-    RESEARCH("research", "Research", "searches the web and reads pages; returns key facts with sources. Task = what to find out."),
+    RESEARCH("research", "Research", "looks up ANY fact from the internet (prices, news, weather, scores, people, places, how-to) and returns key facts with sources. Task = what to find out."),
     MESSAGES("messages", "Messages", "lists chats, reads a chat, drafts or sends a WhatsApp reply (the user approves every send). Task = what to do and with whom."),
-    TERMINAL("terminal", "Terminal", "runs ONE shell command on the phone (user approves) and returns its output. Task = what to check or do."),
+    TERMINAL("terminal", "Terminal", "runs ONE shell command ON THIS PHONE (storage, files, battery, network, apps) and returns its output; it cannot look things up online. Task = what to check or do."),
     BROWSER("browser", "Browser", "opens a specific website/URL and extracts what the task asks from it. Task = site + what to look for."),
     MEMORY("memory", "Memory", "saves a fact about the user, or recalls saved facts. Task = what to remember or recall."),
     FILES("files", "Files", "writes a file (.md, .csv, .docx Word or .txt) into Downloads from the results so far. Task = format + what the file should contain."),
