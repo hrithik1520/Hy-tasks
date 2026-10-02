@@ -158,6 +158,18 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     "Let Hy look up facts it doesn't know (Bing / DuckDuckGo / Wikipedia). Only the search words leave the phone — never your messages.",
                     s.webSearch,
                 ) { v -> vm.settings.update { it.copy(webSearch = v) } }
+                Spacer(Modifier.padding(4.dp))
+                Text("Agent: max steps per task", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(5, 10, 15).forEach { n ->
+                        FilterChip(selected = s.agentMaxSteps == n, onClick = { vm.settings.update { it.copy(agentMaxSteps = n) } }, label = { Text("$n") })
+                    }
+                }
+                Text(
+                    "More steps = harder tasks, but slower (each step is several seconds on the phone).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     "Terminal commands suggested by Hy never run until you tap Run. Incoming messages can't trigger searches or commands.",
                     style = MaterialTheme.typography.bodySmall,

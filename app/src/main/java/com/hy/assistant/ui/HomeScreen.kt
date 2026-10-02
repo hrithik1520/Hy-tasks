@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -92,6 +93,8 @@ fun HomeScreen(
     val pendingRequest by vm.pendingRequest.collectAsState()
     val threaded by vm.threadedOutput.collectAsState()
     var showAllTurns by rememberSaveable { mutableStateOf(false) }
+    val agentRun by vm.agentRun.collectAsState()
+    val agentMode by vm.agentMode.collectAsState()
     var showAllFeed by rememberSaveable { mutableStateOf(false) }
     var askedNotify by rememberSaveable { mutableStateOf(false) }
 
@@ -253,6 +256,9 @@ fun HomeScreen(
                 pendingRequest?.let { req -> item { Bubble(req, fromUser = true) } }
             }
 
+            agentRun?.let { r ->
+                item { AgentCard(r, vm.agents::approve, vm.agents::skip, vm::stopAgent, vm::closeAgent) }
+            }
             disambiguation?.let { d -> item { DisambiguationCard(d, vm::chooseCandidate, vm::dismissDisambiguation) } }
             proposal?.let { p ->
                 item { ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal) }
@@ -266,7 +272,15 @@ fun HomeScreen(
                         value = command,
                         onValueChange = { command = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text(if (turns.isEmpty()) "Ask or tell Hy anything…" else "Ask a follow-up…") },
+                        placeholder = {
+                            Text(
+                                when {
+                                    agentMode -> "Give the agent a multi-step task…"
+                                    turns.isEmpty() -> "Ask or tell Hy anything…"
+                                    else -> "Ask a follow-up…"
+                                },
+                            )
+                        },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { submit() }),
@@ -275,7 +289,13 @@ fun HomeScreen(
                 }
             }
             item {
-                Row(Modifier.horizontalScroll(rememberScrollState())) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                    FilterChip(
+                        selected = agentMode,
+                        onClick = { vm.setAgentMode(!agentMode) },
+                        label = { Text(if (agentMode) "Agent mode on" else "Agent mode") },
+                    )
+                    Spacer(Modifier.width(8.dp))
                     FilledTonalButton(onClick = { vm.runCommand("What did I miss?") }) { Text("What did I miss?") }
                     Spacer(Modifier.width(8.dp))
                     FilledTonalButton(onClick = openBrowser) { Text("Browser") }

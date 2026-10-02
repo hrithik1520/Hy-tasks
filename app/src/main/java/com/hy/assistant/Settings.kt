@@ -40,6 +40,8 @@ data class SettingsData(
     /** Let the AI look things up on the web (only the search query leaves the phone). */
     val webSearch: Boolean = true,
     val terminalBackend: TerminalBackend = TerminalBackend.LOCAL,
+    /** Most steps a multi-step agent run may take before it must answer. */
+    val agentMaxSteps: Int = 10,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -80,6 +82,7 @@ class Settings(context: Context) {
             webSearch = prefs.getBoolean("webSearch", d.webSearch),
             terminalBackend = runCatching { TerminalBackend.valueOf(prefs.getString("terminalBackend", d.terminalBackend.name)!!) }
                 .getOrDefault(d.terminalBackend),
+            agentMaxSteps = prefs.getInt("agentMaxSteps", d.agentMaxSteps),
         )
     }
 
@@ -104,6 +107,7 @@ class Settings(context: Context) {
             .putString("chatModes", encodeModes(d.chatModes))
             .putBoolean("webSearch", d.webSearch)
             .putString("terminalBackend", d.terminalBackend.name)
+            .putInt("agentMaxSteps", d.agentMaxSteps)
             .apply()
         _data.value = d
     }

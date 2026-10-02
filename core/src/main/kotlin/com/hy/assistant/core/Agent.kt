@@ -18,6 +18,8 @@ sealed interface AgentAction {
     data class RunCommand(val command: String) : AgentAction
     /** Save a fact about the user ("note that I'm vegetarian"). */
     data class Remember(val fact: String) : AgentAction
+    /** Needs several steps / tools combined: hand the whole request to the multi-step orchestrator. */
+    data object MultiStep : AgentAction
 }
 
 /**
@@ -27,7 +29,7 @@ sealed interface AgentAction {
 object Agent {
     /** GBNF: exactly one compact JSON object per action. */
     val GRAMMAR = """
-        root ::= answer | digest | reply | draft | summarize | setmode | chatmode | search | browse | runcmd | remember
+        root ::= answer | digest | reply | draft | summarize | setmode | chatmode | search | browse | runcmd | remember | multistep
         answer ::= "{\"action\":\"answer\"}"
         digest ::= "{\"action\":\"digest\"}"
         reply ::= "{\"action\":\"reply\",\"contact\":" str ",\"message\":" str "}"
@@ -38,6 +40,7 @@ object Agent {
         search ::= "{\"action\":\"search\",\"query\":" str "}"
         browse ::= "{\"action\":\"browse\",\"target\":" str "}"
         runcmd ::= "{\"action\":\"run_command\",\"command\":" str "}"
+        multistep ::= "{\"action\":\"agent\"}"
         remember ::= "{\"action\":\"remember\",\"fact\":" str "}"
         str ::= "\"" ([^"\\\x7F\x00-\x1F] | "\\" ["\\/bfnrt]){0,300} "\""
     """.trimIndent()
@@ -60,6 +63,7 @@ object Agent {
                 - browse: open a website or a site search in the browser. "target" is a URL or "<site> <what to search>".
                 - run_command: user wants to run a terminal/shell command (Termux or Android shell). "command" is one shell command.
                 - remember: the user tells you a lasting fact or preference to keep (about them, people, plans). "fact" restates it.
+                - agent: the request needs SEVERAL steps or tools combined (look something up AND message someone, check something then act on it, compare several things).
                 - answer: anything else — questions about messages or notifications, writing, explaining, lists, math, ideas, advice.
                 Known chats: $names
                 Examples:
@@ -72,6 +76,9 @@ object Agent {
                 "auto reply to my boss" -> {"action":"set_chat_mode","contact":"boss","mode":"auto"}
                 "did anyone mention dinner?" -> {"action":"answer"}
                 "note that I'm vegetarian" -> {"action":"remember","fact":"I'm vegetarian"}
+                "find today's gold price and send it to dad" -> {"action":"agent"}
+                "check my storage and if it's under 5GB tell me what to delete" -> {"action":"agent"}
+                "compare iphone 17 and pixel 10 prices and save the cheaper one to memory" -> {"action":"agent"}
                 "who won the match yesterday" -> {"action":"search","query":"match result yesterday"}
                 "what is the price of iphone 17 in india" -> {"action":"search","query":"iPhone 17 price India"}
                 "open youtube and search lofi music" -> {"action":"browse","target":"youtube lofi music"}
@@ -171,6 +178,7 @@ object Agent {
             }
             "search" -> fields["query"]?.trim()?.takeIf { it.isNotEmpty() }?.let { AgentAction.Search(it) }
             "browse" -> fields["target"]?.trim()?.takeIf { it.isNotEmpty() }?.let { AgentAction.Browse(it) }
+            "agent" -> AgentAction.MultiStep
             "remember" -> fields["fact"]?.trim()?.takeIf { it.isNotEmpty() }?.let { AgentAction.Remember(it) }
             "run_command" -> fields["command"]?.trim()?.takeIf { it.isNotEmpty() }?.let { AgentAction.RunCommand(it) }
             else -> null

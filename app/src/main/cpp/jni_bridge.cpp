@@ -38,17 +38,17 @@ JNIEXPORT void JNICALL Java_com_hy_assistant_llm_LlamaNative_backendInit(JNIEnv 
 
 JNIEXPORT jlong JNICALL Java_com_hy_assistant_llm_LlamaNative_loadModel(JNIEnv *env, jobject, jstring path) {
     const char *c_path = env->GetStringUTFChars(path, nullptr);
-    llama_model *model = hy::load_model(c_path);
+    hy::Engine *engine = hy::open(c_path);
     env->ReleaseStringUTFChars(path, c_path);
-    return reinterpret_cast<jlong>(model);
+    return reinterpret_cast<jlong>(engine);
 }
 
 JNIEXPORT void JNICALL Java_com_hy_assistant_llm_LlamaNative_freeModel(JNIEnv *, jobject, jlong handle) {
-    hy::free_model(reinterpret_cast<llama_model *>(handle));
+    hy::close(reinterpret_cast<hy::Engine *>(handle));
 }
 
 JNIEXPORT jint JNICALL Java_com_hy_assistant_llm_LlamaNative_generate(
-    JNIEnv *env, jobject, jlong handle, jbyteArray system, jbyteArray user, jint n_ctx,
+    JNIEnv *env, jobject, jlong handle, jint slot, jbyteArray system, jbyteArray user, jint n_ctx,
     jint n_threads, jint max_tokens, jfloat temperature, jbyteArray grammar, jobject callback) {
     jclass cb_class = env->GetObjectClass(callback);
     jmethodID on_bytes = env->GetMethodID(cb_class, "onBytes", "([B)Z");
@@ -73,8 +73,12 @@ JNIEXPORT jint JNICALL Java_com_hy_assistant_llm_LlamaNative_generate(
         return keep_going == JNI_TRUE;
     };
 
-    return hy::generate(reinterpret_cast<llama_model *>(handle), to_string(env, system),
+    return hy::generate(reinterpret_cast<hy::Engine *>(handle), slot, to_string(env, system),
                         to_string(env, user), params, on_text);
+}
+
+JNIEXPORT jint JNICALL Java_com_hy_assistant_llm_LlamaNative_lastReused(JNIEnv *, jobject, jlong handle, jint slot) {
+    return hy::last_reused(reinterpret_cast<hy::Engine *>(handle), slot);
 }
 
 JNIEXPORT jstring JNICALL Java_com_hy_assistant_llm_LlamaNative_lastError(JNIEnv *env, jobject) {

@@ -58,6 +58,7 @@ class LlamaEngine(private val scope: CoroutineScope) {
                 val started = System.currentTimeMillis()
                 val n = LlamaNative.generate(
                     handle,
+                    prompt.cacheSlot,
                     prompt.system.toByteArray(Charsets.UTF_8),
                     prompt.user.toByteArray(Charsets.UTF_8),
                     nCtx,
@@ -69,7 +70,7 @@ class LlamaEngine(private val scope: CoroutineScope) {
                     trySend(String(bytes, Charsets.UTF_8))
                     !cancelled.get()
                 }
-                Log.i(TAG, "generated $n tokens in ${System.currentTimeMillis() - started} ms")
+                Log.i(TAG, "slot ${prompt.cacheSlot}: reused ${LlamaNative.lastReused(handle, prompt.cacheSlot)} cached tokens, generated $n in ${System.currentTimeMillis() - started} ms")
                 _state.value = EngineState.Ready(model.name)
                 if (n < 0) throw GenerationException(LlamaNative.lastError())
                 close()

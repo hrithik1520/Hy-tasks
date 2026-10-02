@@ -16,6 +16,7 @@ object LlamaNative {
     external fun freeModel(handle: Long)
     external fun generate(
         handle: Long,
+        slot: Int,
         system: ByteArray,
         user: ByteArray,
         nCtx: Int,
@@ -25,5 +26,6 @@ object LlamaNative {
         grammar: ByteArray?,
         callback: TokenCallback,
     ): Int
+    external fun lastReused(handle: Long, slot: Int): Int
     external fun lastError(): String
 }

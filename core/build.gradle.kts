@@ -20,5 +20,6 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
     System.getProperty("hy.bingHtml")?.let { systemProperty("hy.bingHtml", it) }
+    System.getProperty("hy.dumpGrammars")?.let { systemProperty("hy.dumpGrammars", it) }
     testLogging { showStandardStreams = true }
 }

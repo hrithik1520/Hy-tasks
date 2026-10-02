@@ -10,6 +10,7 @@ import com.hy.assistant.core.Conversation
 import com.hy.assistant.core.Memory
 import com.hy.assistant.core.MemoryFact
 import com.hy.assistant.core.Turn
+import com.hy.assistant.agents.AgentRunner
 import com.hy.assistant.memory.ConversationStore
 import com.hy.assistant.memory.MemoryStore
 import com.hy.assistant.core.CommandParser
@@ -176,6 +177,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun newChat() {
         job?.cancel()
+        agents.clear()
         pendingTurn = null
         ConversationStore.clear()
         _output.value = null
@@ -184,6 +186,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val big get() = settings.current.contextSize >= 4096
     private fun history(maxChars: Int) = Conversation.historyBlock(ConversationStore.turns.value, maxChars)
     private fun memory() = MemoryStore.promptBlock(if (big) 800 else 400)
+
+    // ---- Multi-step agents --------------------------------------------------------------
+
+    val agents = AgentRunner(app, settings) { prompt ->
+        val sb = StringBuilder()
+        stream(prompt) { sb.append(it) }
+        sb.toString()
+    }
+    val agentRun = agents.run
+
+    /** When on, every typed request goes to the multi-step agent. */
+    private val _agentMode = MutableStateFlow(false)
+    val agentMode: StateFlow<Boolean> = _agentMode.asStateFlow()
+
+    fun setAgentMode(on: Boolean) {
+        _agentMode.value = on
+    }
+
+    private fun startAgent(goal: String) {
+        if (models.activeModelFile() == null) {
+            _output.value = AssistantOutput("Agent", "", false, error = NO_MODEL)
+            return
+        }
+        job?.cancel()
+        _output.value = null
+        val ctx = buildString {
+            settings.current.userName.takeIf { it.isNotBlank() }?.let { append("User's name: ").append(it).append("\n") }
+            memory().takeIf { it.isNotBlank() }?.let { append("Facts about the user:\n").append(it).append("\n") }
+            history(600).takeIf { it.isNotBlank() }?.let { append("Earlier conversation:\n").append(it).append("\n") }
+        }
+        job = viewModelScope.launch {
+            try {
+                val answer = agents.execute(goal, ctx, viewModelScope)
+                _output.value = AssistantOutput("Agent", answer, running = false, links = agents.run.value?.links.orEmpty())
+            } catch (e: CancellationException) {
+                pendingTurn = null
+                throw e
+            } catch (e: Exception) {
+                _output.value = AssistantOutput("Agent", "", running = false, error = e.message ?: "Agent failed")
+            }
+        }
+    }
+
+    fun stopAgent() {
+        job?.cancel()
+        agents.skip()
+    }
+
+    fun closeAgent() {
+        if (agents.run.value?.running == true) stopAgent()
+        agents.clear()
+    }
 
     private fun handleMemory(cmd: Command): Boolean {
         val text = when (cmd) {
@@ -229,10 +283,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val text = input.trim()
         if (text.isEmpty()) return
         job?.cancel()
+        agents.clear()
         val parsed = CommandParser.parse(text, chats.value.map { it.name })
         if (parsed == Command.NewChat) return newChat()
         pendingTurn = text
         if (handleMemory(parsed)) return
+        // "agent: …" or Agent mode → multi-step run.
+        val agentGoal = Regex("""^(?:agent|/agent)[:\s]+(.+)$""", RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)
+        if (agentGoal != null || _agentMode.value) return startAgent(agentGoal ?: text)
         val names = chats.value.map { it.name }
         val hasModel = models.activeModelFile() != null
         // If a rule matched but the name isn't a known chat, the rule probably misfired
@@ -291,6 +349,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Terminal.propose(action.command)
                 _route.value = "terminal"
             }
+            AgentAction.MultiStep -> startAgent(request)
             is AgentAction.Remember -> _output.value = AssistantOutput("Memory", rememberText(action.fact), running = false)
             AgentAction.Digest -> digest()
             is AgentAction.Summarize -> withChat(action.contact, notFound(action.contact)) { summarize(it.key) }

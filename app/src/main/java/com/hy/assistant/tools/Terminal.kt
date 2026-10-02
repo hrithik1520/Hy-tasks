@@ -69,10 +69,13 @@ object Terminal {
     fun hasTermuxPermission(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, TERMUX_PERMISSION) == PackageManager.PERMISSION_GRANTED
 
-    /** Called only from an explicit user tap (Run button or typing in the terminal). */
-    fun run(context: Context, scope: CoroutineScope, command: String, backend: TerminalBackend) {
+    /**
+     * Called only after an explicit user tap (Run button, typing in the terminal, or approving an
+     * agent step). Returns the entry id, or null for an empty command.
+     */
+    fun run(context: Context, scope: CoroutineScope, command: String, backend: TerminalBackend): Int? {
         val cmd = command.trim()
-        if (cmd.isEmpty()) return
+        if (cmd.isEmpty()) return null
         _proposed.value = null
         val entry = TermEntry(ids.getAndIncrement(), cmd, backend)
         _entries.update { (it + entry).takeLast(50) }
@@ -80,6 +83,7 @@ object Terminal {
             TerminalBackend.LOCAL -> scope.launch(Dispatchers.IO) { runLocal(context, entry) }
             TerminalBackend.TERMUX -> runTermux(context, entry)
         }
+        return entry.id
     }
 
     private fun runLocal(context: Context, entry: TermEntry) {

@@ -2,8 +2,19 @@ package com.hy.assistant.core
 
 data class ChatLine(val sender: String, val text: String, val timestamp: Long, val fromMe: Boolean)
 
-/** [grammar]: optional GBNF that constrains the output (see [Agent.GRAMMAR]). */
-data class Prompt(val system: String, val user: String, val maxTokens: Int, val temperature: Float, val grammar: String? = null)
+/**
+ * [grammar]: optional GBNF that constrains the output (see [Agent.GRAMMAR]).
+ * [cacheSlot]: native KV-cache slot; prompts that grow step by step (the agent orchestrator) use
+ * their own slot so each step only processes the new part.
+ */
+data class Prompt(
+    val system: String,
+    val user: String,
+    val maxTokens: Int,
+    val temperature: Float,
+    val grammar: String? = null,
+    val cacheSlot: Int = 0,
+)
 
 enum class Tone(val description: String) {
     CASUAL("casual and friendly"),

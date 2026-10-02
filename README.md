@@ -35,6 +35,13 @@ What it does:
 - **Long-term memory**: "remember that my boss is Priya", "what do you remember?",
   "forget my boss". Used in answers and in reply drafts you review, never in Auto replies.
   Passwords, PINs and codes are refused. View or delete everything in Settings → Memory.
+- **Multi-step agents**: for tasks that need several steps, an orchestrator plans and hands
+  each step to a specialist sub-agent: **Research** (web), **Messages** (WhatsApp),
+  **Terminal**, **Browser** and **Memory**. You see every step live. It runs up to 10 steps
+  by default (5/10/15 in Settings) and pauses for your tap before sending any message or
+  running any command. Start with "Agent mode", "agent: …", or just ask
+  ("find today's gold price and send it to dad"). The engine reuses its cache between steps,
+  so each step only processes the new part.
 - **Two reply modes** (switch on the home screen, or per chat):
   - **Manual**: every new message gets a drafted reply in a notification. Tap **Send**
     right from the notification shade, or **Reply** to type your own.
