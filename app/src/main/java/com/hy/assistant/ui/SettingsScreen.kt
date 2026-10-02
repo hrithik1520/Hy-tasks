@@ -125,6 +125,20 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             }
 
             SectionCard {
+                Text("Tools", style = MaterialTheme.typography.titleSmall)
+                ToggleRow(
+                    "Web search",
+                    "Let Hy look up facts it doesn't know (Bing / DuckDuckGo / Wikipedia). Only the search words leave the phone — never your messages.",
+                    s.webSearch,
+                ) { v -> vm.settings.update { it.copy(webSearch = v) } }
+                Text(
+                    "Terminal commands suggested by Hy never run until you tap Run. Incoming messages can't trigger searches or commands.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            SectionCard {
                 Text("Notifications Hy watches", style = MaterialTheme.typography.titleSmall)
                 ToggleRow("Watch all apps", "Chats from any messenger + a feed of other notifications (codes, deliveries, payments…).", s.watchAllApps) { v ->
                     vm.settings.update { it.copy(watchAllApps = v) }
@@ -167,7 +181,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             }
 
             Text(
-                "Hy Assistant · all AI runs on-device · no account, no cloud.",
+                "Hy Assistant · all AI runs on-device · no account, no cloud. Web search sends only the query.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

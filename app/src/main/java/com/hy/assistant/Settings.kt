@@ -2,6 +2,7 @@ package com.hy.assistant
 
 import android.content.Context
 import com.hy.assistant.core.Tone
+import com.hy.assistant.tools.TerminalBackend
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +35,10 @@ data class SettingsData(
     /** Capture notifications from every app, not just WhatsApp. */
     val watchAllApps: Boolean = true,
     val chatModes: Map<String, ChatMode> = emptyMap(),
+    // Tools
+    /** Let the AI look things up on the web (only the search query leaves the phone). */
+    val webSearch: Boolean = true,
+    val terminalBackend: TerminalBackend = TerminalBackend.LOCAL,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -64,6 +69,9 @@ class Settings(context: Context) {
             appendSignature = prefs.getBoolean("appendSignature", d.appendSignature),
             watchAllApps = prefs.getBoolean("watchAllApps", d.watchAllApps),
             chatModes = decodeModes(prefs.getString("chatModes", null)),
+            webSearch = prefs.getBoolean("webSearch", d.webSearch),
+            terminalBackend = runCatching { TerminalBackend.valueOf(prefs.getString("terminalBackend", d.terminalBackend.name)!!) }
+                .getOrDefault(d.terminalBackend),
         )
     }
 
@@ -86,6 +94,8 @@ class Settings(context: Context) {
             .putBoolean("appendSignature", d.appendSignature)
             .putBoolean("watchAllApps", d.watchAllApps)
             .putString("chatModes", encodeModes(d.chatModes))
+            .putBoolean("webSearch", d.webSearch)
+            .putString("terminalBackend", d.terminalBackend.name)
             .apply()
         _data.value = d
     }

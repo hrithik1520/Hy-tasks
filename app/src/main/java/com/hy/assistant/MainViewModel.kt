@@ -28,9 +28,23 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.hy.assistant.core.SearchResult
+import com.hy.assistant.core.Web
+import com.hy.assistant.tools.Browser
+import com.hy.assistant.tools.Terminal
+import com.hy.assistant.tools.WebSearch
 
 /** Result of a read-only assistant task (summary / catch-up). */
-data class AssistantOutput(val title: String, val text: String, val running: Boolean, val error: String? = null)
+data class AssistantOutput(
+    val title: String,
+    val text: String,
+    val running: Boolean,
+    val error: String? = null,
+    /** Web sources behind the answer (tap to open in the in-app browser). */
+    val links: List<SearchResult> = emptyList(),
+)
 
 /** A reply waiting for the user's explicit confirmation. Nothing is sent without a tap. */
 data class ReplyProposal(
@@ -66,6 +80,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun consumeOpenChat() {
         _openChat.value = null
+    }
+
+    /** Screen the assistant wants to show ("browser", "terminal"). */
+    private val _route = MutableStateFlow<String?>(null)
+    val route: StateFlow<String?> = _route.asStateFlow()
+
+    fun consumeRoute() {
+        _route.value = null
+    }
+
+    fun openInBrowser(url: String) {
+        Browser.open(url)
+        _route.value = "browser"
     }
 
     fun setReplyMode(mode: ReplyMode) {
@@ -153,7 +180,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun execute(action: AgentAction, request: String) {
         when (action) {
-            AgentAction.Answer -> runReadOnly("Hy", Agent.answerPrompt(request, buildContext(), settings.current.userName))
+            AgentAction.Answer -> launchTask("Hy") { answerWithSearchFallback("Hy", request, buildContext()) }
+            is AgentAction.Search -> launchTask("Searching…") { searchAndAnswer(request, action.query) }
+            is AgentAction.Browse -> {
+                _output.value = null
+                openInBrowser(Web.browseUrl(action.target))
+            }
+            is AgentAction.RunCommand -> {
+                _output.value = null
+                Terminal.propose(action.command)
+                _route.value = "terminal"
+            }
             AgentAction.Digest -> digest()
             is AgentAction.Summarize -> withChat(action.contact, notFound(action.contact)) { summarize(it.key) }
             is AgentAction.DraftReply -> withChat(action.contact, notFound(action.contact)) { draftReply(it.key, null) }
@@ -313,6 +350,74 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 _output.value = AssistantOutput(title, sb.toString(), running = false, error = e.message ?: "Generation failed")
             }
+        }
+    }
+
+    private fun launchTask(title: String, block: suspend () -> Unit) {
+        job?.cancel()
+        _output.value = AssistantOutput(title, "", running = true)
+        job = viewModelScope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _output.value = AssistantOutput(title, _output.value?.text.orEmpty(), running = false, error = e.message ?: "Failed")
+            }
+        }
+    }
+
+    /** Streams [prompt] into the output card. Text that starts like "SEARCH:" is held back, not shown. */
+    private suspend fun streamToOutput(title: String, prompt: Prompt, links: List<SearchResult> = emptyList()): String {
+        val sb = StringBuilder()
+        stream(prompt) { chunk ->
+            sb.append(chunk)
+            val t = sb.toString().trim()
+            val maybeSearch = t.length <= Agent.SEARCH_PREFIX.length && Agent.SEARCH_PREFIX.startsWith(t, ignoreCase = true) ||
+                t.startsWith(Agent.SEARCH_PREFIX, ignoreCase = true)
+            if (!maybeSearch) _output.value = AssistantOutput(title, t, running = true, links = links)
+        }
+        return sb.toString().trim()
+    }
+
+    /** Answers from local context; if the model says it needs facts, does a quick web search. */
+    private suspend fun answerWithSearchFallback(title: String, request: String, context: String) {
+        val allow = settings.current.webSearch
+        val text = streamToOutput(title, Agent.answerPrompt(request, context, settings.current.userName, allowSearch = allow))
+        val query = if (allow) Agent.searchRequest(text) else null
+        if (query != null) searchAndAnswer(request, query) else _output.value = AssistantOutput(title, text, running = false)
+    }
+
+    private suspend fun searchAndAnswer(request: String, query: String) {
+        if (!settings.current.webSearch) {
+            _output.value = AssistantOutput("Web search is off", "Turn on \"Web search\" in Settings to let Hy look this up.", false)
+            return
+        }
+        val title = "Web · $query"
+        _output.value = AssistantOutput(title, "Searching the web…", running = true)
+        val outcome = withContext(Dispatchers.IO) { WebSearch.search(query) }
+        if (outcome.results.isEmpty()) {
+            _output.value = AssistantOutput(title, "", false, error = "No results — check your internet connection.")
+            return
+        }
+        val links = outcome.results.take(3)
+        _output.value = AssistantOutput(title, "Reading results…", running = true, links = links)
+        val answer = streamToOutput(title, Agent.searchAnswerPrompt(request, query, Web.formatResults(outcome.results, outcome.topText)), links)
+        _output.value = AssistantOutput(title, answer.removePrefix(Agent.SEARCH_PREFIX).trim(), running = false, links = links)
+    }
+
+    /** Question about the page open in the in-app browser. */
+    fun askAboutPage(question: String, url: String, pageText: String) {
+        if (models.activeModelFile() == null) {
+            _output.value = AssistantOutput("This page", "", false, error = NO_MODEL)
+            return
+        }
+        val q = question.ifBlank { "Summarize this page in 5 bullet points." }
+        val ctx = "## Web page: $url\n" + pageText.take(if (settings.current.contextSize >= 4096) 7000 else 3000)
+        launchTask(Web.host(url)) {
+            // Page text is untrusted: the model only produces text, no actions.
+            val text = streamToOutput(Web.host(url), Agent.answerPrompt(q, ctx, settings.current.userName))
+            _output.value = AssistantOutput(Web.host(url), text, running = false)
         }
     }
 

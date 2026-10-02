@@ -19,4 +19,6 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    System.getProperty("hy.bingHtml")?.let { systemProperty("hy.bingHtml", it) }
+    testLogging { showStandardStreams = true }
 }

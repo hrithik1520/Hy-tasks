@@ -7,10 +7,18 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Keeps the CPU awake for the few seconds it takes to draft a reply with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Run terminal commands inside Termux (user grants it; Termux must allow external apps). -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 
     <queries>
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
+        <package android:name="com.termux" />
+        <!-- Browsers, for "Open in browser app". -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
     </queries>
 
     <application
@@ -46,6 +54,11 @@
 
         <receiver
             android:name=".auto.ActionReceiver"
+            android:exported="false" />
+
+        <!-- Termux sends command results back through our own PendingIntent. -->
+        <receiver
+            android:name=".tools.TermuxResultReceiver"
             android:exported="false" />
     </application>
 </manifest>

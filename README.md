@@ -16,6 +16,19 @@ What it does:
   `did anyone mention dinner?`, `list my unread chats as a table`,
   `write a leave application for tomorrow`, `stop auto replying to the office group`.
   Each chat also has an "Ask anything about this chat" box.
+- **Quick web search**: when a question needs facts Hy doesn't know (news, prices,
+  people, how-to…), it searches the web (Bing → DuckDuckGo → Wikipedia, no API key),
+  reads the top page and answers with tappable sources. Only the search words leave the
+  phone. Can be turned off in Settings.
+- **In-app browser**: `open youtube and search lofi`, `open github.com`. Ask questions about
+  any page you're on ("summarize this", "what's the price?").
+- **Terminal**: run commands in the phone's own shell or in **Termux** (full Linux:
+  `pkg`, `python`, `git`). Hy can propose commands (`check storage in termux`) but they
+  only run when you tap **Run**, with a red warning for risky ones (`rm`, `dd`, …).
+  Termux setup: install Termux from F-Droid, run
+  `echo "allow-external-apps = true" >> ~/.termux/termux.properties`, restart Termux,
+  then tap *Allow Termux access* in Hy's Terminal.
+- Incoming messages never trigger web searches or commands.
 - **Two reply modes** (switch on the home screen, or per chat):
   - **Manual**: every new message gets a drafted reply in a notification. Tap **Send**
     right from the notification shade, or **Reply** to type your own.

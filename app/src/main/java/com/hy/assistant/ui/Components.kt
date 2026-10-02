@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hy.assistant.AssistantOutput
+import com.hy.assistant.core.Web
+import androidx.compose.foundation.clickable
 import com.hy.assistant.Disambiguation
 import com.hy.assistant.ReplyProposal
 import com.hy.assistant.notifications.Chat
@@ -43,7 +45,7 @@ fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
 }
 
 @Composable
-fun OutputCard(output: AssistantOutput, onDismiss: () -> Unit) {
+fun OutputCard(output: AssistantOutput, onDismiss: () -> Unit, onOpenLink: ((String) -> Unit)? = null) {
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(output.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -55,6 +57,22 @@ fun OutputCard(output: AssistantOutput, onDismiss: () -> Unit) {
         }
         if (output.text.isNotEmpty()) SelectionContainer { Text(output.text) }
         output.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (output.links.isNotEmpty()) {
+            Spacer(Modifier.padding(2.dp))
+            Text("Sources", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            output.links.forEach { link ->
+                Text(
+                    "• ${link.title} — ${Web.host(link.url)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (onOpenLink != null) Modifier.clickable { onOpenLink(link.url) } else Modifier)
+                        .padding(vertical = 3.dp),
+                )
+            }
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = onDismiss) { Text(if (output.running) "Stop" else "Close") }
         }

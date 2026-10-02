@@ -6,7 +6,9 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -64,6 +66,8 @@ fun HomeScreen(
     openChat: (String) -> Unit,
     openModels: () -> Unit,
     openSettings: () -> Unit,
+    openBrowser: () -> Unit,
+    openTerminal: () -> Unit,
 ) {
     val context = LocalContext.current
     val chats by vm.chats.collectAsState()
@@ -219,8 +223,12 @@ fun HomeScreen(
                 }
             }
             item {
-                Row {
+                Row(Modifier.horizontalScroll(rememberScrollState())) {
                     FilledTonalButton(onClick = vm::digest) { Text("What did I miss?") }
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalButton(onClick = openBrowser) { Text("Browser") }
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalButton(onClick = openTerminal) { Text("Terminal") }
                     Spacer(Modifier.width(8.dp))
                     FilledTonalButton(onClick = openModels) { Text("Models") }
                 }
@@ -230,7 +238,7 @@ fun HomeScreen(
             proposal?.let { p ->
                 item { ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal) }
             }
-            output?.let { o -> item { OutputCard(o, vm::dismissOutput) } }
+            output?.let { o -> item { OutputCard(o, vm::dismissOutput, onOpenLink = vm::openInBrowser) } }
 
             // ---- What Hy did on its own ----------------------------------------------
             if (activity.isNotEmpty()) {
