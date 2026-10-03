@@ -26,9 +26,6 @@ data class SettingsData(
     /** Draft a reply automatically for every new message (Manual mode: shown as a notification). */
     val proactiveSuggestions: Boolean = true,
     val autoSendDelaySec: Int = 10,
-    val autoReplyGroups: Boolean = false,
-    /** Also auto-reply in non-WhatsApp messengers (Telegram, Messages, …). */
-    val autoReplyOtherApps: Boolean = false,
     val autoCooldownMin: Int = 5,
     val appendSignature: Boolean = false,
     /** Capture notifications from every app, not just WhatsApp. */
@@ -58,8 +55,6 @@ class Settings(context: Context) {
             replyMode = runCatching { ReplyMode.valueOf(prefs.getString("replyMode", d.replyMode.name)!!) }.getOrDefault(d.replyMode),
             proactiveSuggestions = prefs.getBoolean("proactiveSuggestions", d.proactiveSuggestions),
             autoSendDelaySec = prefs.getInt("autoSendDelaySec", d.autoSendDelaySec),
-            autoReplyGroups = prefs.getBoolean("autoReplyGroups", d.autoReplyGroups),
-            autoReplyOtherApps = prefs.getBoolean("autoReplyOtherApps", d.autoReplyOtherApps),
             autoCooldownMin = prefs.getInt("autoCooldownMin", d.autoCooldownMin),
             appendSignature = prefs.getBoolean("appendSignature", d.appendSignature),
             watchAllApps = prefs.getBoolean("watchAllApps", d.watchAllApps),
@@ -80,8 +75,6 @@ class Settings(context: Context) {
             .putString("replyMode", d.replyMode.name)
             .putBoolean("proactiveSuggestions", d.proactiveSuggestions)
             .putInt("autoSendDelaySec", d.autoSendDelaySec)
-            .putBoolean("autoReplyGroups", d.autoReplyGroups)
-            .putBoolean("autoReplyOtherApps", d.autoReplyOtherApps)
             .putInt("autoCooldownMin", d.autoCooldownMin)
             .putBoolean("appendSignature", d.appendSignature)
             .putBoolean("watchAllApps", d.watchAllApps)

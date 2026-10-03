@@ -101,23 +101,18 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.padding(4.dp))
-                Text("At most one auto-reply per chat every", style = MaterialTheme.typography.labelLarge)
+                Text("After confirming a message, stay quiet in that chat for", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(2, 5, 15).forEach { m ->
                         FilterChip(selected = s.autoCooldownMin == m, onClick = { vm.settings.update { it.copy(autoCooldownMin = m) } }, label = { Text("$m min") })
                     }
                 }
-                ToggleRow("Auto-reply in group chats", "Off by default — group replies are easy to get wrong.", s.autoReplyGroups) { v ->
-                    vm.settings.update { it.copy(autoReplyGroups = v) }
-                }
-                ToggleRow("Auto-reply in other messengers", "Telegram, Messages, etc. (WhatsApp is always included).", s.autoReplyOtherApps) { v ->
-                    vm.settings.update { it.copy(autoReplyOtherApps = v) }
-                }
-                ToggleRow("Add \"— sent by my assistant\"", "Lets people know an auto-reply wasn't typed by you.", s.appendSignature) { v ->
+                ToggleRow("Add \"— sent by my assistant\"", "Adds a line to the confirmation Alfrid sends.", s.appendSignature) { v ->
                     vm.settings.update { it.copy(appendSignature = v) }
                 }
                 Text(
-                    "Always held for you (never auto-sent): OTPs/codes, money & payments, passwords/PINs, emergencies. " +
+                    "Auto mode covers every chat — direct chats, groups and other messengers. " +
+                        "Always held for you (never auto-sent): OTPs/codes, money & payments, passwords/PINs, emergencies. " +
                         "Per-chat Auto/Manual/Off is on each chat's screen.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -125,7 +120,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             }
 
             SectionCard {
-                Text("Notifications Hy watches", style = MaterialTheme.typography.titleSmall)
+                Text("Notifications Alfrid watches", style = MaterialTheme.typography.titleSmall)
                 ToggleRow("Watch all apps", "Chats from any messenger + a feed of other notifications (codes, deliveries, payments…).", s.watchAllApps) { v ->
                     vm.settings.update { it.copy(watchAllApps = v) }
                 }
@@ -134,7 +129,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                 }
                 Spacer(Modifier.padding(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { MessageStore.clearAll(); NotificationFeed.clear() }) { Text("Clear messages") }
+                    OutlinedButton(onClick = { MessageStore.clearAll(); NotificationFeed.clear(); vm.forgetOutreach() }) { Text("Clear messages") }
                     OutlinedButton(onClick = { ActivityLog.clear() }) { Text("Clear activity") }
                 }
                 Text(
@@ -167,7 +162,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             }
 
             Text(
-                "Hy Assistant · all AI runs on-device · no account, no cloud.",
+                "Alfrid · all AI runs on-device · no account, no cloud.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

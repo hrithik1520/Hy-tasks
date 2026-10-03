@@ -56,7 +56,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _canNotify = MutableStateFlow(HyNotifications.canPost(app))
     val canNotify: StateFlow<Boolean> = _canNotify.asStateFlow()
 
-    /** Chat to open, e.g. after tapping a Hy notification. */
+    /** Chat to open, e.g. after tapping an Alfrid notification. */
     private val _openChat = MutableStateFlow<String?>(null)
     val openChat: StateFlow<String?> = _openChat.asStateFlow()
 
@@ -68,11 +68,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _openChat.value = null
     }
 
+    /** Forgets who Alfrid has already introduced itself to, so every chat is greeted afresh. */
+    fun forgetOutreach() = app.automation.forgetOutreach()
+
     fun setReplyMode(mode: ReplyMode) {
         settings.update { it.copy(replyMode = mode) }
         _messages.tryEmit(
-            if (mode == ReplyMode.AUTO) "Auto mode on — Hy will reply by itself (safety rules apply)"
-            else "Manual mode — Hy suggests, you tap Send",
+            if (mode == ReplyMode.AUTO) "Auto mode on — Alfrid will reply by itself (safety rules apply)"
+            else "Manual mode — Alfrid suggests, you tap Send",
         )
     }
 
@@ -135,7 +138,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun runAgent(request: String) {
         job?.cancel()
-        _output.value = AssistantOutput("Hy", "", running = true)
+        _output.value = AssistantOutput("Alfrid", "", running = true)
         val names = chats.value.map { it.name }
         job = viewModelScope.launch {
             val action = try {
@@ -153,7 +156,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun execute(action: AgentAction, request: String) {
         when (action) {
-            AgentAction.Answer -> runReadOnly("Hy", Agent.answerPrompt(request, buildContext(), settings.current.userName))
+            AgentAction.Answer -> runReadOnly("Alfrid", Agent.answerPrompt(request, buildContext(), settings.current.userName))
             AgentAction.Digest -> digest()
             is AgentAction.Summarize -> withChat(action.contact, notFound(action.contact)) { summarize(it.key) }
             is AgentAction.DraftReply -> withChat(action.contact, notFound(action.contact)) { draftReply(it.key, null) }

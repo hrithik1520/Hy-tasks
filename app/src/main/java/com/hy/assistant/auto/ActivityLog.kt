@@ -12,6 +12,8 @@ import java.io.File
 object ActivityLog {
     enum class Kind(val label: String) {
         AUTO_SENT("Auto-replied"),
+        MESSAGE("Message for you"),
+        NOTED("No reply needed"),
         SENT("Sent"),
         SUGGESTED("Suggested"),
         HELD("Held for you"),
