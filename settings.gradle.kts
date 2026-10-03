@@ -32,7 +32,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "HyAssistant"
+rootProject.name = "Alfrid"
 include(":core")
 // HY_CORE_ONLY=1 builds/tests just the pure-Kotlin module (no Android SDK needed).
 if (System.getenv("HY_CORE_ONLY") == null) {

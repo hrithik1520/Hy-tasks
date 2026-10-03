@@ -6,7 +6,7 @@ import android.content.Intent
 import androidx.core.app.RemoteInput
 import com.hy.assistant.HyApp
 
-/** Handles buttons on Hy's notifications. Not exported: only our own PendingIntents reach it. */
+/** Handles buttons on Alfrid's notifications. Not exported: only our own PendingIntents reach it. */
 class ActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val chatKey = intent.getStringExtra(EXTRA_CHAT) ?: return

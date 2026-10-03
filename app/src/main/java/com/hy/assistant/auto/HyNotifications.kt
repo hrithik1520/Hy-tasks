@@ -15,7 +15,7 @@ import androidx.core.content.ContextCompat
 import com.hy.assistant.MainActivity
 import com.hy.assistant.R
 
-/** Hy's own notifications: reply suggestions (with Send) and auto-reply countdowns (with Cancel). */
+/** Alfrid's own notifications: reply suggestions (with Send) and auto-reply countdowns (with Cancel). */
 object HyNotifications {
     private const val CH_SUGGEST = "suggestions"
     private const val CH_AUTO = "auto_replies"
@@ -30,7 +30,7 @@ object HyNotifications {
         )
         nm.createNotificationChannel(
             NotificationChannel(CH_AUTO, "Auto-replies", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Replies Hy sends for you in Auto mode"
+                description = "Replies Alfrid sends for you in Auto mode"
             },
         )
     }

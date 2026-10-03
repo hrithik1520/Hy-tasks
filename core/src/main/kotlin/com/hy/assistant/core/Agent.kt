@@ -70,7 +70,7 @@ object Agent {
     fun answerPrompt(request: String, context: String, userName: String): Prompt {
         val me = userName.ifBlank { "the user" }
         return Prompt(
-            system = "You are Hy, a helpful on-device assistant for $me. Answer in English. " +
+            system = "You are Alfrid, a helpful on-device assistant for $me. Answer in English. " +
                 "Do exactly what the request asks, in exactly the format it asks for (list, table, email, poem, one word, " +
                 "steps, etc.). If no format is given, be concise. " +
                 "Below is $me's recent WhatsApp/notification data between <data> and </data>; use it when the request is " +
