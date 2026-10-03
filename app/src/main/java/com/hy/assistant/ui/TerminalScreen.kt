@@ -131,7 +131,7 @@ fun TerminalScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                 }
             } else if (backend == TerminalBackend.LOCAL && entries.isEmpty() && proposed == null) {
                 Text(
-                    "Runs in Hy's own sandbox with Android's built-in tools (ls, cat, df, ps, ping, getprop…). " +
+                    "Runs in Alfrid's own sandbox with Android's built-in tools (ls, cat, df, ps, ping, getprop…). " +
                         "For a full Linux (pkg, python, git, /sdcard) switch to Termux.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -172,7 +172,7 @@ fun TerminalScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             // AI-proposed command: shown in full, runs only on tap.
             proposed?.let { p ->
                 SectionCard(Modifier.padding(12.dp)) {
-                    Text("Hy suggests running:", style = MaterialTheme.typography.titleSmall)
+                    Text("Alfrid suggests running:", style = MaterialTheme.typography.titleSmall)
                     Text(p.command, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(vertical = 6.dp))
                     if (p.warnings.isNotEmpty()) {
                         Text("⚠ This command ${p.warnings.joinToString(", ")}.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -203,7 +203,7 @@ fun TerminalScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                 Button(onClick = { run(input); input = "" }, enabled = input.isNotBlank()) { Text("Run") }
             }
             Text(
-                "Tip: ask Hy on the home screen, e.g. \"check storage in termux\" — it proposes the command here.",
+                "Tip: ask Alfrid on the home screen, e.g. \"check storage in termux\" — it proposes the command here.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),

@@ -23,7 +23,7 @@ import com.hy.assistant.notifications.StoredMessage
 
 /**
  * Reads on-screen text through Accessibility, only:
- *  - when the user presses the accessibility button / shortcut ("Ask Hy about this screen"), and
+ *  - when the user presses the accessibility button / shortcut ("Ask Alfrid about this screen"), and
  *  - optionally, while a WhatsApp chat is open, to add its visible messages to Hy's chat history.
  * Password fields are never read. Nothing leaves the phone.
  */

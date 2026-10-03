@@ -182,7 +182,7 @@ fun SavedFileBar(file: SavedFile, onOpen: () -> Unit, onShare: () -> Unit, onDis
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("📄 ${file.name}", style = MaterialTheme.typography.titleSmall, maxLines = 1)
-                Text("Saved in Downloads/Hy", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Saved in Downloads/Alfrid", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = onOpen) { Text("Open") }
             TextButton(onClick = onShare) { Text("Share") }

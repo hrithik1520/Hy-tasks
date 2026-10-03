@@ -146,7 +146,7 @@ private fun CaptchaDialog(webView: WebView) {
             Column(Modifier.padding(12.dp)) {
                 Text("Google check", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Google wants to make sure you're human. Solve it below — Hy continues automatically once it's done.",
+                    "Google wants to make sure you're human. Solve it below — Alfrid continues automatically once it's done.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 AndroidView(

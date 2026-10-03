@@ -50,7 +50,7 @@ class BriefingWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (HyNotifications.canPost(applicationContext)) {
             val n = NotificationCompat.Builder(applicationContext, HyNotifications.CH_BRIEFING)
                 .setSmallIcon(R.drawable.ic_stat_hy)
-                .setContentTitle("Your Hy briefing · ${unread.size} unread chat${if (unread.size == 1) "" else "s"}")
+                .setContentTitle("Your Alfrid briefing · ${unread.size} unread chat${if (unread.size == 1) "" else "s"}")
                 .setContentText(body.lineSequence().first())
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                 .setContentIntent(HyNotifications.openAppIntent(applicationContext))

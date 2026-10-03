@@ -120,7 +120,7 @@ object Terminal {
 
     private fun runTermux(context: Context, entry: TermEntry) {
         if (!isTermuxInstalled(context)) return finish(entry.id, "Termux is not installed. Install it from F-Droid, or switch to Phone shell.", -1)
-        if (!hasTermuxPermission(context)) return finish(entry.id, "Allow \"Run commands in Termux\" for Hy (Terminal → Termux setup).", -1)
+        if (!hasTermuxPermission(context)) return finish(entry.id, "Allow \"Run commands in Termux\" for Alfrid (Terminal → Termux setup).", -1)
         val resultIntent = Intent(context, TermuxResultReceiver::class.java).putExtra(TermuxResultReceiver.EXTRA_ID, entry.id)
         val flags = PendingIntent.FLAG_ONE_SHOT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
         val pending = PendingIntent.getBroadcast(context, entry.id, resultIntent, flags)

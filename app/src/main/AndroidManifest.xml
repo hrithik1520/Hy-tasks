@@ -3,7 +3,7 @@
 
     <!-- Only used to download model files. All AI runs on-device. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Reply suggestions / auto-reply notices from Hy itself. -->
+    <!-- Reply suggestions / auto-reply notices from Alfrid itself. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Keeps the CPU awake for the few seconds it takes to draft a reply with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -29,7 +29,7 @@
         android:label="@string/app_name"
         android:largeHeap="true"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Hy">
+        android:theme="@style/Theme.Alfrid">
 
         <activity
             android:name=".MainActivity"
@@ -40,8 +40,8 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- "Share → Hy" from any app: text or links. -->
-            <intent-filter android:label="Ask Hy">
+            <!-- "Share → Alfrid" from any app: text or links. -->
+            <intent-filter android:label="Ask Alfrid">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
@@ -91,7 +91,7 @@
             android:name=".auto.ModeTileService"
             android:exported="true"
             android:icon="@drawable/ic_stat_hy"
-            android:label="Hy auto-reply"
+            android:label="Alfrid auto-reply"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Files Hy exports (.md/.csv/.docx/.txt), shared through FileProvider. -->
+<!-- Files Alfrid exports (.md/.csv/.docx/.txt), shared through FileProvider. -->
 <paths>
     <cache-path name="exports" path="exports/" />
 </paths>

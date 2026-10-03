@@ -31,7 +31,7 @@ object HyNotifications {
         )
         nm.createNotificationChannel(
             NotificationChannel(CH_AUTO, "Auto-replies", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Replies Hy sends for you in Auto mode"
+                description = "Replies Alfrid sends for you in Auto mode"
             },
         )
         nm.createNotificationChannel(

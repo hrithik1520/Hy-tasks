@@ -17,11 +17,11 @@ import java.util.Locale
 
 /** A file Hy created: saved in Downloads/Hy, plus a private copy for Open/Share. */
 data class SavedFile(val name: String, val format: ExportFormat, val shareUri: Uri) {
-    val location: String get() = "Downloads/Hy/$name"
+    val location: String get() = "Downloads/Alfrid/$name"
 }
 
 object FileSaver {
-    private const val FOLDER = "Hy"
+    private const val FOLDER = "Alfrid"
 
     /** Builds the file from [text] and saves it. Blocking: call on Dispatchers.IO. */
     fun save(context: Context, text: String, title: String, format: ExportFormat): SavedFile {

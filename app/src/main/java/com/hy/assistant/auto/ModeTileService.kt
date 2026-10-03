@@ -21,7 +21,7 @@ class ModeTileService : TileService() {
         val tile = qsTile ?: return
         val auto = HyApp.instance.settings.current.replyMode == ReplyMode.AUTO
         tile.state = if (auto) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        tile.label = "Hy auto-reply"
+        tile.label = "Alfrid auto-reply"
         tile.subtitle = if (auto) "Auto" else "Manual"
         tile.icon = Icon.createWithResource(this, R.drawable.ic_stat_hy)
         tile.updateTile()
