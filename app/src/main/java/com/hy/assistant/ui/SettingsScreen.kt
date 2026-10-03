@@ -34,6 +34,14 @@ import com.hy.assistant.MainViewModel
 import com.hy.assistant.core.Tone
 import com.hy.assistant.auto.ActivityLog
 import com.hy.assistant.auto.BriefingWorker
+import android.content.Intent
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.hy.assistant.memory.MemoryStore
 import com.hy.assistant.tools.SearchEngine
 import com.hy.assistant.notifications.MessageStore
@@ -46,6 +54,32 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
     val s by vm.settings.data.collectAsState()
     val facts by vm.memoryFacts.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    var resumeTick by remember { mutableIntStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumeTick++ }
+    val screenOn = remember(resumeTick) { com.hy.assistant.screen.HyScreenService.isEnabled(context) }
+    var showDisclosure by remember { mutableStateOf(false) }
+    if (showDisclosure) {
+        AlertDialog(
+            onDismissRequest = { showDisclosure = false },
+            title = { Text("Let Hy read your screen?") },
+            text = {
+                Text(
+                    "Hy uses Android's Accessibility service to read the text on your screen:\n\n" +
+                        "• only when you tap the accessibility button, or in open WhatsApp chats if you turn that on\n" +
+                        "• never password fields\n" +
+                        "• everything stays on this phone, nothing is uploaded\n\n" +
+                        "Hy doesn't tap, type or control other apps. On the next screen, open \"Hy · read screen\" and turn it on.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDisclosure = false
+                    context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }) { Text("Open settings") }
+            },
+            dismissButton = { TextButton(onClick = { showDisclosure = false }) { Text("Not now") } },
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -194,6 +228,40 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                 )
                 Text(
                     "Terminal commands suggested by Hy never run until you tap Run. Incoming messages can't trigger searches or commands.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            SectionCard {
+                Text("Screen reading", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (screenOn) "On. Tap the accessibility button (or your accessibility shortcut) on any screen to ask Hy about it."
+                    else "Off. Lets Hy read the text on your screen when you ask, like Gemini's \"Ask about screen\".",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.padding(4.dp))
+                if (!screenOn) {
+                    OutlinedButton(onClick = { showDisclosure = true }) { Text("Turn on…") }
+                } else {
+                    OutlinedButton(onClick = {
+                        context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }) { Text("Accessibility settings") }
+                }
+                ToggleRow(
+                    "Read open WhatsApp chats (experimental)",
+                    "While a WhatsApp chat is open, Hy adds the messages you can see to its history, so summaries and replies see the whole conversation, not just notifications.",
+                    s.readWhatsAppScreen,
+                ) { v -> vm.settings.update { it.copy(readWhatsAppScreen = v) } }
+                if (screenOn) {
+                    TextButton(onClick = {
+                        val dump = com.hy.assistant.screen.HyScreenService.lastDump
+                        val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Hy screen dump", dump.ifBlank { "(press the accessibility button on a screen first)" }))
+                    }) { Text("Copy last screen dump (for fixing the reader)") }
+                }
+                Text(
+                    "Never reads password fields. Reads only when you press the button, or WhatsApp chats if the switch is on. Nothing leaves the phone.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

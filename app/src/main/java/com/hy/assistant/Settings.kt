@@ -48,6 +48,8 @@ data class SettingsData(
     val humanizeReplies: Boolean = true,
     val briefingEnabled: Boolean = false,
     val briefingHour: Int = 8,
+    /** Accessibility: add messages from the open WhatsApp chat on screen to Hy's history. */
+    val readWhatsAppScreen: Boolean = false,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -92,6 +94,7 @@ class Settings(context: Context) {
             humanizeReplies = prefs.getBoolean("humanizeReplies", d.humanizeReplies),
             briefingEnabled = prefs.getBoolean("briefingEnabled", d.briefingEnabled),
             briefingHour = prefs.getInt("briefingHour", d.briefingHour),
+            readWhatsAppScreen = prefs.getBoolean("readWhatsAppScreen", d.readWhatsAppScreen),
             searchEngine = runCatching { SearchEngine.valueOf(prefs.getString("searchEngine", d.searchEngine.name)!!) }.getOrDefault(d.searchEngine),
         )
     }
@@ -122,6 +125,7 @@ class Settings(context: Context) {
             .putBoolean("humanizeReplies", d.humanizeReplies)
             .putBoolean("briefingEnabled", d.briefingEnabled)
             .putInt("briefingHour", d.briefingHour)
+            .putBoolean("readWhatsAppScreen", d.readWhatsAppScreen)
             .apply()
         _data.value = d
     }

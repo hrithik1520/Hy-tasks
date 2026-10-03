@@ -63,6 +63,10 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         intent?.getStringExtra(EXTRA_OPEN_CHAT)?.let { vm.requestOpenChat(it) }
+        intent?.getStringExtra(EXTRA_SCREEN_LABEL)?.let { label ->
+            vm.onScreen(intent.getStringExtra(EXTRA_SCREEN_TEXT).orEmpty(), label, intent.getStringExtra(EXTRA_SCREEN_ERROR))
+            intent.removeExtra(EXTRA_SCREEN_LABEL)
+        }
         if (intent?.action == Intent.ACTION_SEND) {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT)
             val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
@@ -73,6 +77,9 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_CHAT = "open_chat"
+        const val EXTRA_SCREEN_TEXT = "screen_text"
+        const val EXTRA_SCREEN_LABEL = "screen_label"
+        const val EXTRA_SCREEN_ERROR = "screen_error"
     }
 }
 

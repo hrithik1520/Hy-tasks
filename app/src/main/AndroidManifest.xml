@@ -72,6 +72,20 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- Screen reading (opt-in): text only, on button press or in open WhatsApp chats. -->
+        <service
+            android:name=".screen.HyScreenService"
+            android:exported="true"
+            android:label="@string/screen_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/screen_service" />
+        </service>
+
         <!-- Quick Settings tile: Manual / Auto reply mode. -->
         <service
             android:name=".auto.ModeTileService"

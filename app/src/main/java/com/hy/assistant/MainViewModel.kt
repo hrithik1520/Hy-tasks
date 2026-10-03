@@ -238,7 +238,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Shared from other apps ("Share → Hy") ------------------------------------------
 
-    data class Shared(val text: String, val subject: String?) {
+    data class Shared(val text: String, val subject: String?, val fromScreen: Boolean = false) {
         /** A bare link: Hy reads the page instead of the link text. */
         val url: String? get() = text.trim().takeIf { Regex("""^https?://\S+$""").matches(it) }
         val label: String get() = subject?.takeIf { it.isNotBlank() } ?: url?.let { Web.host(it) } ?: text.take(60)
@@ -249,6 +249,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onShared(text: String, subject: String?) {
         _shared.value = Shared(text.trim(), subject)
+        _route.value = "home"
+    }
+
+    /** Text read from another app's screen (Accessibility button). Treated like shared text. */
+    fun onScreen(text: String, label: String, error: String?) {
+        if (error != null || text.isBlank()) {
+            _shared.value = null
+            _messages.tryEmit(error ?: "Nothing readable on that screen.")
+            _route.value = "home"
+            return
+        }
+        _shared.value = Shared(text, label, fromScreen = true)
         _route.value = "home"
     }
 
@@ -273,7 +285,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     ?.takeIf { it.length > 80 } ?: throw IllegalStateException("Couldn't read that page (it may need JavaScript). Open it in Hy's browser and use \"Ask about this page\".")
             } ?: sh.text
             val budget = if (big) 7000 else 3000
-            val ctx = "## Shared ${if (sh.url != null) "web page: ${sh.url}" else "text"}" +
+            val ctx = "## ${if (sh.fromScreen) "Text on the user's screen" else "Shared"} ${if (sh.url != null) "web page: ${sh.url}" else "text"}" +
                 (sh.subject?.let { " ($it)" } ?: "") + "\n" + content.take(budget)
             // Shared content is untrusted: answer text only, no actions.
             val text = streamToOutput(sh.label, Agent.answerPrompt(withFormatHint(task), ctx, settings.current.userName))

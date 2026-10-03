@@ -109,6 +109,37 @@ object MessageStore {
         return added
     }
 
+    /**
+     * Messages read from an open WhatsApp chat on screen (Accessibility). Merged into the chat with
+     * the same name (so notification history and screen history combine); new text only, in order.
+     * Returns how many messages were added.
+     */
+    fun mergeFromScreen(name: String, messages: List<StoredMessage>): Int {
+        var added = 0
+        synchronized(lock) {
+            val chat = chats.values.firstOrNull { it.name.equals(name, ignoreCase = true) && it.packageName.startsWith("com.whatsapp") }
+                ?: MutableChat("screen:$name", name, "com.whatsapp", "WhatsApp", false).also { chats[it.key] = it }
+            for (m in messages) {
+                if (m.text.isBlank()) continue
+                // Screen rows have only minute-precision times: match on text + side instead.
+                if (chat.messages.any { it.text == m.text && it.fromMe == m.fromMe }) continue
+                chat.messages.add(m)
+                added++
+            }
+            if (added > 0) {
+                chat.messages.sortBy { it.timestamp }
+                while (chat.messages.size > MAX_PER_CHAT) chat.messages.removeAt(0)
+                // The user is looking at this chat right now: it's read.
+                chat.lastReadAt = System.currentTimeMillis()
+            }
+        }
+        if (added > 0) {
+            publish()
+            scheduleSave()
+        }
+        return added
+    }
+
     /** Records a reply we sent so it shows immediately (WhatsApp's echo is de-duplicated). */
     fun addOwnMessage(key: String, text: String) {
         synchronized(lock) {

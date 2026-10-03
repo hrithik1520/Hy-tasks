@@ -85,6 +85,11 @@ Updates: install the newer `HyAssistant.apk` over the old one. Your data and mod
 
 - **Share → Hy** from any app (text or links): Summarize, Explain simply, Key facts,
   "Is it true?", Reply ideas, or ask anything about it.
+- **Screen reading** (opt-in, Accessibility; Settings → Screen reading): on any app, tap the
+  accessibility button and Hy reads the text on screen. Then Summarize, Explain, Translate,
+  Reply ideas, or ask anything. Optionally (experimental) it reads the WhatsApp chat you have open
+  so replies and summaries see the whole conversation, not just notifications. It never reads
+  password fields, never taps or types, and keeps everything on the phone.
 - **Quick Settings tile**: switch Manual/Auto from the notification shade (edit tiles → "Hy auto-reply").
 - **Morning briefing** (optional): a daily notification at your chosen time with unread chats and
   important payments, deliveries and reminders.

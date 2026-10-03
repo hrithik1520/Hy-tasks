@@ -374,7 +374,7 @@ private fun SharedCard(sh: MainViewModel.Shared, onAsk: (String) -> Unit, onDism
     var question by rememberSaveable(sh) { mutableStateOf("") }
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Shared with Hy", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(if (sh.fromScreen) "On your screen" else "Shared with Hy", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             TextButton(onClick = onDismiss) { Text("✕") }
         }
         Text(sh.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
@@ -386,6 +386,7 @@ private fun SharedCard(sh: MainViewModel.Shared, onAsk: (String) -> Unit, onDism
                 "Key facts" to "List the key facts, numbers and dates.",
                 "Is it true?" to "Point out claims here that look doubtful or need checking.",
                 "Reply ideas" to "Suggest 3 short replies I could send about this.",
+                "Translate" to "Translate this into simple English.",
             ).forEach { (label, task) ->
                 AssistChip(onClick = { onAsk(task) }, label = { Text(label) }, modifier = Modifier.padding(end = 6.dp))
             }
