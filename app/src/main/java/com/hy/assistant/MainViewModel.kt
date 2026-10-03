@@ -96,6 +96,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _openChat.value = null
     }
 
+    /** Forgets who Alfrid has introduced itself to, so every chat is greeted afresh. */
+    fun forgetOutreach() = app.automation.forgetOutreach()
+
     /** Screen the assistant wants to show ("browser", "terminal"). */
     private val _route = MutableStateFlow<String?>(null)
     val route: StateFlow<String?> = _route.asStateFlow()
@@ -112,8 +115,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setReplyMode(mode: ReplyMode) {
         settings.update { it.copy(replyMode = mode) }
         _messages.tryEmit(
-            if (mode == ReplyMode.AUTO) "Auto mode on — Hy will reply by itself (safety rules apply)"
-            else "Manual mode — Hy suggests, you tap Send",
+            if (mode == ReplyMode.AUTO) "Auto mode on — Alfrid will reply by itself (safety rules apply)"
+            else "Manual mode — Alfrid suggests, you tap Send",
         )
     }
 
@@ -236,7 +239,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ---- Shared from other apps ("Share → Hy") ------------------------------------------
+    // ---- Shared from other apps ("Share → Alfrid") ------------------------------------------
 
     data class Shared(val text: String, val subject: String?, val fromScreen: Boolean = false) {
         /** A bare link: Hy reads the page instead of the link text. */
@@ -282,7 +285,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val content = sh.url?.let { url ->
                 _output.value = AssistantOutput(sh.label, "Reading the page…", running = true)
                 withContext(Dispatchers.IO) { runCatching { Web.htmlToText(com.hy.assistant.tools.WebSearch.get(url), 6000) }.getOrNull() }
-                    ?.takeIf { it.length > 80 } ?: throw IllegalStateException("Couldn't read that page (it may need JavaScript). Open it in Hy's browser and use \"Ask about this page\".")
+                    ?.takeIf { it.length > 80 } ?: throw IllegalStateException("Couldn't read that page (it may need JavaScript). Open it in Alfrid's browser and use \"Ask about this page\".")
             } ?: sh.text
             val budget = if (big) 7000 else 3000
             val ctx = "## ${if (sh.fromScreen) "Text on the user's screen" else "Shared"} ${if (sh.url != null) "web page: ${sh.url}" else "text"}" +
@@ -468,7 +471,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun runAgent(request: String) {
         job?.cancel()
-        _output.value = AssistantOutput("Hy", "", running = true)
+        _output.value = AssistantOutput("Alfrid", "", running = true)
         val names = chats.value.map { it.name }
         job = viewModelScope.launch {
             val action = try {
@@ -486,8 +489,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun execute(action: AgentAction, request: String) {
         when (action) {
-            AgentAction.Answer -> launchTask("Hy") {
-                answerWithSearchFallback("Hy", withFormatHint(request), buildContext())
+            AgentAction.Answer -> launchTask("Alfrid") {
+                answerWithSearchFallback("Alfrid", withFormatHint(request), buildContext())
                 autoExport(request)
             }
             is AgentAction.Search -> launchTask("Searching…") {
@@ -713,7 +716,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun searchAndAnswer(request: String, query: String) {
         if (!settings.current.webSearch) {
-            _output.value = AssistantOutput("Web search is off", "Turn on \"Web search\" in Settings to let Hy look this up.", false)
+            _output.value = AssistantOutput("Web search is off", "Turn on \"Web search\" in Settings to let Alfrid look this up.", false)
             return
         }
         _output.value = AssistantOutput("Search · $query", "Searching the web…", running = true)

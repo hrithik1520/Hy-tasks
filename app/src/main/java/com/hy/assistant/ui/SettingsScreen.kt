@@ -61,14 +61,14 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
     if (showDisclosure) {
         AlertDialog(
             onDismissRequest = { showDisclosure = false },
-            title = { Text("Let Hy read your screen?") },
+            title = { Text("Let Alfrid read your screen?") },
             text = {
                 Text(
-                    "Hy uses Android's Accessibility service to read the text on your screen:\n\n" +
+                    "Alfrid uses Android's Accessibility service to read the text on your screen:\n\n" +
                         "• only when you tap the accessibility button, or in open WhatsApp chats if you turn that on\n" +
                         "• never password fields\n" +
                         "• everything stays on this phone, nothing is uploaded\n\n" +
-                        "Hy doesn't tap, type or control other apps. On the next screen, open \"Hy · read screen\" and turn it on.",
+                        "Alfrid doesn't tap, type or control other apps. On the next screen, open \"Alfrid · read screen\" and turn it on.",
                 )
             },
             confirmButton = {
@@ -146,23 +146,24 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.padding(4.dp))
-                Text("At most one auto-reply per chat every", style = MaterialTheme.typography.labelLarge)
+                Text("After confirming a message, stay quiet in that chat for", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(2, 5, 15).forEach { m ->
                         FilterChip(selected = s.autoCooldownMin == m, onClick = { vm.settings.update { it.copy(autoCooldownMin = m) } }, label = { Text("$m min") })
                     }
                 }
-                ToggleRow("Include group chats", "Suggestions and auto-replies in groups. Off by default (busy groups = lots of drafts). Per-chat Auto/Manual still works.", s.autoReplyGroups) { v ->
+                ToggleRow("Include group chats", "Alfrid's opening question and suggestions in groups too. Turn off for quieter groups; per-chat Auto/Manual still works.", s.autoReplyGroups) { v ->
                     vm.settings.update { it.copy(autoReplyGroups = v) }
                 }
                 ToggleRow("Include other messengers", "Telegram, Messages, etc. (WhatsApp is always included). Bank/OTP senders are always skipped.", s.autoReplyOtherApps) { v ->
                     vm.settings.update { it.copy(autoReplyOtherApps = v) }
                 }
-                ToggleRow("Add \"— sent by my assistant\"", "Lets people know an auto-reply wasn't typed by you.", s.appendSignature) { v ->
+                ToggleRow("Add \"— sent by my assistant\"", "Adds a line to the confirmation Alfrid sends.", s.appendSignature) { v ->
                     vm.settings.update { it.copy(appendSignature = v) }
                 }
                 Text(
-                    "Always held for you (never auto-sent): OTPs/codes, money & payments, passwords/PINs, emergencies. " +
+                    "Auto mode asks every new chat whether they have a message for you, then confirms it. " +
+                        "Always held for you (never auto-sent): OTPs/codes, money & payments, passwords/PINs, emergencies. " +
                         "Per-chat Auto/Manual/Off is on each chat's screen.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -172,7 +173,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             SectionCard {
                 Text("Memory", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Tell Hy \"remember that …\" on the home screen. Used in answers and in reply drafts you review — " +
+                    "Tell Alfrid \"remember that …\" on the home screen. Used in answers and in reply drafts you review — " +
                         "never in Auto replies. Passwords, PINs and codes are refused. Stored only on this phone.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -197,7 +198,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                 Text("Tools", style = MaterialTheme.typography.titleSmall)
                 ToggleRow(
                     "Web search",
-                    "Let Hy look up facts it doesn't know (Bing / DuckDuckGo / Wikipedia). Only the search words leave the phone — never your messages.",
+                    "Let Alfrid look up facts it doesn't know (Bing / DuckDuckGo / Wikipedia). Only the search words leave the phone — never your messages.",
                     s.webSearch,
                 ) { v -> vm.settings.update { it.copy(webSearch = v) } }
                 Text("Search engine", style = MaterialTheme.typography.labelLarge)
@@ -227,7 +228,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "Terminal commands suggested by Hy never run until you tap Run. Incoming messages can't trigger searches or commands.",
+                    "Terminal commands suggested by Alfrid never run until you tap Run. Incoming messages can't trigger searches or commands.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -236,8 +237,8 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             SectionCard {
                 Text("Screen reading", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    if (screenOn) "On. Tap the accessibility button (or your accessibility shortcut) on any screen to ask Hy about it."
-                    else "Off. Lets Hy read the text on your screen when you ask, like Gemini's \"Ask about screen\".",
+                    if (screenOn) "On. Tap the accessibility button (or your accessibility shortcut) on any screen to ask Alfrid about it."
+                    else "Off. Lets Alfrid read the text on your screen when you ask, like Gemini's \"Ask about screen\".",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.padding(4.dp))
@@ -250,14 +251,14 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                 }
                 ToggleRow(
                     "Read open WhatsApp chats (experimental)",
-                    "While a WhatsApp chat is open, Hy adds the messages you can see to its history, so summaries and replies see the whole conversation, not just notifications.",
+                    "While a WhatsApp chat is open, Alfrid adds the messages you can see to its history, so summaries and replies see the whole conversation, not just notifications.",
                     s.readWhatsAppScreen,
                 ) { v -> vm.settings.update { it.copy(readWhatsAppScreen = v) } }
                 if (screenOn) {
                     TextButton(onClick = {
                         val dump = com.hy.assistant.screen.HyScreenService.lastDump
                         val cm = context.getSystemService(android.content.ClipboardManager::class.java)
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Hy screen dump", dump.ifBlank { "(press the accessibility button on a screen first)" }))
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Alfrid screen dump", dump.ifBlank { "(press the accessibility button on a screen first)" }))
                     }) { Text("Copy last screen dump (for fixing the reader)") }
                 }
                 Text(
@@ -287,7 +288,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             }
 
             SectionCard {
-                Text("Notifications Hy watches", style = MaterialTheme.typography.titleSmall)
+                Text("Notifications Alfrid watches", style = MaterialTheme.typography.titleSmall)
                 ToggleRow("Watch all apps", "Chats from any messenger + a feed of other notifications (codes, deliveries, payments…).", s.watchAllApps) { v ->
                     vm.settings.update { it.copy(watchAllApps = v) }
                 }
@@ -296,7 +297,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                 }
                 Spacer(Modifier.padding(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { MessageStore.clearAll(); NotificationFeed.clear() }) { Text("Clear messages") }
+                    OutlinedButton(onClick = { MessageStore.clearAll(); NotificationFeed.clear(); vm.forgetOutreach() }) { Text("Clear messages") }
                     OutlinedButton(onClick = { ActivityLog.clear() }) { Text("Clear activity") }
                 }
                 Text(
@@ -329,7 +330,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
             }
 
             Text(
-                "Hy Assistant · all AI runs on-device · no account, no cloud. Web search sends only the query.",
+                "Alfrid · all AI runs on-device · no account, no cloud. Web search sends only the query.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

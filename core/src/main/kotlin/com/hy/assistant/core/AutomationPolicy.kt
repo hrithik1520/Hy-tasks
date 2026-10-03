@@ -41,22 +41,25 @@ object AutomationPolicy {
         val block = i.incoming.firstNotNullOfOrNull { SafetyFilter.blockReason(it) }
         // Nothing sensible to reply to a code or a password request: stay quiet.
         if (block == SafetyFilter.Reason.OTP || block == SafetyFilter.Reason.CREDENTIALS) return AutoDecision.None
-        // The model only understands English: don't guess a reply to "Savu ninna".
-        if (i.incoming.none { Language.looksEnglish(it) }) return AutoDecision.None
-
         val explicit = i.chatSetting == ChatSetting.AUTO || i.chatSetting == ChatSetting.MANUAL
         if (!explicit && i.isGroup && !i.includeGroups) return AutoDecision.None
         if (!explicit && !i.isWhatsApp && !i.includeOtherApps) return AutoDecision.None
 
         val wantAuto = i.chatSetting == ChatSetting.AUTO || (i.chatSetting == ChatSetting.DEFAULT && i.globalAuto)
+        // Auto mode sends Alfrid's own fixed words, so it works whatever language the chat is in.
+        // A drafted reply needs the English-only model to have understood the message, so without
+        // English there is nothing useful to show the user.
+        val english = i.incoming.any { Language.looksEnglish(it) }
         if (!wantAuto) {
-            return if (i.proactiveSuggestions || i.chatSetting == ChatSetting.MANUAL) AutoDecision.Suggest else AutoDecision.None
+            val suggest = i.proactiveSuggestions || i.chatSetting == ChatSetting.MANUAL
+            return if (english && suggest) AutoDecision.Suggest else AutoDecision.None
         }
-        return when {
-            block != null -> AutoDecision.Hold(block.label)
-            i.inCooldown -> AutoDecision.Hold("already auto-replied recently")
-            i.dailyLimitReached -> AutoDecision.Hold("daily auto-reply limit reached")
-            else -> AutoDecision.Auto
-        }
+        val hold = when {
+            block != null -> block.label
+            i.inCooldown -> "already auto-replied recently"
+            i.dailyLimitReached -> "daily auto-reply limit reached"
+            else -> null
+        } ?: return AutoDecision.Auto
+        return if (english) AutoDecision.Hold(hold) else AutoDecision.None
     }
 }

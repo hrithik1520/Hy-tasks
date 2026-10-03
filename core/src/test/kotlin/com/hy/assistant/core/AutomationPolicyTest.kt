@@ -36,10 +36,20 @@ class AutomationPolicyTest {
         assertEquals(AutoDecision.None, d(base.copy(chatName = "56767")))
         assertEquals(AutoDecision.None, d(base.copy(canReply = false)))
         assertEquals(AutoDecision.None, d(base.copy(chatSetting = ChatSetting.OFF)))
-        assertEquals(AutoDecision.None, d(base.copy(globalAuto = true, incoming = listOf("Poya", "Savu ninna"))))
         assertEquals(AutoDecision.None, d(base.copy(incoming = listOf("नमस्ते कैसे हो"))))
         assertEquals(AutoDecision.Auto, d(base.copy(globalAuto = true, incoming = listOf("Savu ninna", "what are you doing"))))
         assertEquals(AutoDecision.Auto, d(base.copy(globalAuto = true, incoming = listOf("👍"))))
+    }
+
+    @Test
+    fun autoGreetsInAnyLanguageButNeverDraftsOne() {
+        // Auto sends Alfrid's own fixed words, so the language of the chat doesn't matter.
+        val auto = base.copy(globalAuto = true, incoming = listOf("Poya", "Savu ninna"))
+        assertEquals(AutoDecision.Auto, d(auto))
+        // A drafted reply needs the English-only model to have understood the message.
+        assertEquals(AutoDecision.None, d(auto.copy(globalAuto = false)))
+        assertEquals(AutoDecision.None, d(auto.copy(inCooldown = true)))
+        assertEquals(AutoDecision.None, d(auto.copy(incoming = listOf("नमस्ते", "₹500 भेजो"))))
     }
 
     @Test

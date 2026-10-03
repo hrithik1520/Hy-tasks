@@ -5,15 +5,18 @@ import android.os.PowerManager
 import android.util.Log
 import com.hy.assistant.ReplyMode
 import com.hy.assistant.Settings
+import com.hy.assistant.SettingsData
 import com.hy.assistant.core.AutoDecision
 import com.hy.assistant.core.AutoReply
 import com.hy.assistant.core.AutomationPolicy
+import com.hy.assistant.core.Outreach
 import com.hy.assistant.core.Prompts
 import com.hy.assistant.llm.LlamaEngine
 import com.hy.assistant.models.ModelManager
 import com.hy.assistant.notifications.Chat
 import com.hy.assistant.notifications.MessageStore
 import com.hy.assistant.notifications.ReplySender
+import com.hy.assistant.notifications.StoredMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -25,9 +28,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Reacts to new incoming messages without the user asking:
- *  - Manual mode: drafts a reply and posts it as a notification with a Send button.
- *  - Auto mode: drafts and sends it after a short cancellable delay, unless a safety rule
- *    holds it back (then it falls back to a Manual suggestion).
+ *  - Auto mode: runs [Outreach] — asks whoever writes in whether they have a message for the
+ *    user, then confirms it will be passed on. The words are fixed, so no model is needed and
+ *    nothing can be invented.
+ *  - Manual mode: drafts a reply with the model and posts it as a notification with a Send
+ *    button. Messages held back from Auto (money, emergencies, cooldown) land here too.
  */
 class Automation(
     private val context: Context,
@@ -36,11 +41,11 @@ class Automation(
     private val engine: LlamaEngine,
     private val scope: CoroutineScope,
 ) {
-    private data class PendingSend(val job: Job, val chatName: String, val text: String)
+    private data class PendingSend(val job: Job, val chatName: String, val text: String, val onSent: (() -> Unit)?)
 
     private val debounce = ConcurrentHashMap<String, Job>()
     private val pendingSends = ConcurrentHashMap<String, PendingSend>()
-    private val lastAutoAt = ConcurrentHashMap<String, Long>()
+    private val outreach = OutreachState(context)
     private val llm = Mutex()
 
     fun onIncoming(chatKey: String) {
@@ -80,49 +85,70 @@ class Automation(
                 proactiveSuggestions = s.proactiveSuggestions,
                 includeGroups = s.autoReplyGroups,
                 includeOtherApps = s.autoReplyOtherApps,
-                inCooldown = System.currentTimeMillis() - (lastAutoAt[chat.key] ?: 0L) < s.autoCooldownMin * 60_000L,
+                // The cooldown starts only once Alfrid has confirmed a message here, so the
+                // answer to its own opening question is never held back.
+                inCooldown = outreach.lastAckAt(chat.key)
+                    .let { it > 0 && System.currentTimeMillis() - it < s.autoCooldownMin * 60_000L },
                 dailyLimitReached = ActivityLog.autoSentToday() >= DAILY_AUTO_LIMIT,
             ),
         )
-        if (decision == AutoDecision.None) return
-        val model = models.activeModelFile() ?: return
-        val sendAutomatically = decision == AutoDecision.Auto
-        val holdReason = (decision as? AutoDecision.Hold)?.reason
-
-        val prompt = if (sendAutomatically) {
-            Prompts.autoReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, ReplyStyle.promptRules(chat, s))
-        } else {
-            Prompts.draftReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, styleRules = ReplyStyle.promptRules(chat, s))
-        }
-        val holdSeed = (System.currentTimeMillis() / 60_000L).toInt() + chat.key.hashCode()
-        // Auto: questions/requests aimed at the user are held by rule (no AI needed); otherwise the
-        // model only chooses hold/reply, and a hold sends a holding message, never invented facts.
-        val quick = if (sendAutomatically) pendingIncoming.lastOrNull()?.let { AutoReply.quickReply(it.text) } else null
-        val draft = if (sendAutomatically && pendingIncoming.any { AutoReply.mustHold(it.text) }) {
-            AutoReply.holdingText(holdSeed)
-        } else if (quick != null) {
-            quick
-        } else {
-            val raw = withWakeLock { llm.withLock { engine.complete(model, prompt, s.threads, s.contextSize) } }
-            if (sendAutomatically) AutoReply.replyText(raw) ?: AutoReply.holdingText(holdSeed) else raw
-        }
-        val text = ReplyStyle.finish(draft, chat, s)
-        if (text.isBlank()) return
-
-        // The user may have replied themselves while we were thinking.
-        val now = MessageStore.chat(chatKey) ?: return
-        if (now.messages.lastOrNull()?.fromMe == true) return
-
-        val incoming = pendingIncoming.joinToString("\n") { it.text }
-        if (sendAutomatically) {
-            scheduleAutoSend(chat, if (s.appendSignature) "$text\n— sent by my assistant" else text, s.autoSendDelaySec)
-        } else {
-            HyNotifications.suggestion(context, chat.key, chat.name, incoming, text, holdReason)
-            ActivityLog.add(if (holdReason != null) ActivityLog.Kind.HELD else ActivityLog.Kind.SUGGESTED, chat.name, text, holdReason)
+        when (decision) {
+            AutoDecision.None -> return
+            AutoDecision.Auto -> runOutreach(chat, pendingIncoming, s)
+            else -> suggest(chat, pendingIncoming, s, (decision as? AutoDecision.Hold)?.reason)
         }
     }
 
-    private fun scheduleAutoSend(chat: Chat, text: String, delaySec: Int) {
+    /**
+     * Alfrid's own two-step script: the opening question the first time someone writes in, then a
+     * confirmation once their answer actually carries a message or task.
+     */
+    private fun runOutreach(chat: Chat, pendingIncoming: List<StoredMessage>, s: SettingsData) {
+        if (!outreach.introduced(chat.key)) {
+            scheduleAutoSend(
+                chat,
+                Outreach.intro(s.userName),
+                s.autoSendDelaySec,
+                onSent = { outreach.markIntroduced(chat.key) },
+            )
+            return
+        }
+        val message = pendingIncoming.joinToString("\n") { it.text }
+        if (!Outreach.looksLikeMessage(message)) {
+            ActivityLog.add(ActivityLog.Kind.NOTED, chat.name, message, "nothing to pass on")
+            return
+        }
+        ActivityLog.add(ActivityLog.Kind.MESSAGE, chat.name, message)
+        // "happy birthday", "thanks", "running late" have one obviously right answer of their own.
+        val reply = pendingIncoming.lastOrNull()?.let { AutoReply.quickReply(it.text) } ?: Outreach.ack(s.userName)
+        val text = if (s.appendSignature) "$reply\n— sent by my assistant" else reply
+        scheduleAutoSend(chat, text, s.autoSendDelaySec, onSent = { outreach.markAcked(chat.key) })
+    }
+
+    /** Manual mode, and anything Auto held back: a drafted reply with a Send button. */
+    private suspend fun suggest(chat: Chat, pendingIncoming: List<StoredMessage>, s: SettingsData, holdReason: String?) {
+        val model = models.activeModelFile() ?: return
+        val prompt = Prompts.draftReply(
+            chat.name,
+            chat.messages.map { it.toChatLine() },
+            s.userName,
+            s.tone,
+            styleRules = ReplyStyle.promptRules(chat, s),
+        )
+        val raw = withWakeLock { llm.withLock { engine.complete(model, prompt, s.threads, s.contextSize) } }
+        val text = ReplyStyle.finish(raw, chat, s)
+        if (text.isBlank()) return
+
+        // The user may have replied themselves while we were thinking.
+        val now = MessageStore.chat(chat.key) ?: return
+        if (now.messages.lastOrNull()?.fromMe == true) return
+
+        val incoming = pendingIncoming.joinToString("\n") { it.text }
+        HyNotifications.suggestion(context, chat.key, chat.name, incoming, text, holdReason)
+        ActivityLog.add(if (holdReason != null) ActivityLog.Kind.HELD else ActivityLog.Kind.SUGGESTED, chat.name, text, holdReason)
+    }
+
+    private fun scheduleAutoSend(chat: Chat, text: String, delaySec: Int, onSent: (() -> Unit)? = null) {
         pendingSends.remove(chat.key)?.job?.cancel()
         val job = scope.launch {
             if (delaySec > 0) {
@@ -135,17 +161,17 @@ class Automation(
                 HyNotifications.cancel(context, chat.key)
                 return@launch
             }
-            sendNow(chat.key, text, auto = true)
+            sendNow(chat.key, text, auto = true, onSent = onSent)
         }
-        pendingSends[chat.key] = PendingSend(job, chat.name, text)
+        pendingSends[chat.key] = PendingSend(job, chat.name, text, onSent)
     }
 
     /** Sends immediately (notification "Send" button, or the end of an auto countdown). */
-    fun sendNow(chatKey: String, text: String, auto: Boolean) {
+    fun sendNow(chatKey: String, text: String, auto: Boolean, onSent: (() -> Unit)? = null) {
         val chatName = MessageStore.chat(chatKey)?.name ?: "chat"
         when (val r = ReplySender.send(context, chatKey, text)) {
             ReplySender.Result.Sent -> {
-                if (auto) lastAutoAt[chatKey] = System.currentTimeMillis()
+                onSent?.invoke()
                 HyNotifications.sent(context, chatKey, chatName, text, auto)
                 ActivityLog.add(if (auto) ActivityLog.Kind.AUTO_SENT else ActivityLog.Kind.SENT, chatName, text)
             }
@@ -166,8 +192,11 @@ class Automation(
     fun sendPendingNow(chatKey: String) {
         val p = pendingSends.remove(chatKey) ?: return
         p.job.cancel()
-        sendNow(chatKey, p.text, auto = true)
+        sendNow(chatKey, p.text, auto = true, onSent = p.onSent)
     }
+
+    /** Lets every chat be greeted again (used when the stored messages are cleared). */
+    fun forgetOutreach() = outreach.clear()
 
     fun hasPending(chatKey: String) = pendingSends.containsKey(chatKey)
 
@@ -185,6 +214,7 @@ class Automation(
     companion object {
         private const val TAG = "Automation"
         private const val DEBOUNCE_MS = 6_000L
-        private const val DAILY_AUTO_LIMIT = 40
+        /** Across all chats, per 24 h — the script is two messages per contact. */
+        private const val DAILY_AUTO_LIMIT = 200
     }
 }

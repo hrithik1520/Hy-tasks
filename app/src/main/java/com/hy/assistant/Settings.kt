@@ -29,9 +29,10 @@ data class SettingsData(
     /** Draft a reply automatically for every new message (Manual mode: shown as a notification). */
     val proactiveSuggestions: Boolean = true,
     val autoSendDelaySec: Int = 10,
-    val autoReplyGroups: Boolean = false,
+    /** Auto mode in group chats too (Alfrid's opening question is the same everywhere). */
+    val autoReplyGroups: Boolean = true,
     /** Also auto-reply in non-WhatsApp messengers (Telegram, Messages, …). */
-    val autoReplyOtherApps: Boolean = false,
+    val autoReplyOtherApps: Boolean = true,
     val autoCooldownMin: Int = 5,
     val appendSignature: Boolean = false,
     /** Capture notifications from every app, not just WhatsApp. */
@@ -81,8 +82,10 @@ class Settings(context: Context) {
             replyMode = runCatching { ReplyMode.valueOf(prefs.getString("replyMode", d.replyMode.name)!!) }.getOrDefault(d.replyMode),
             proactiveSuggestions = prefs.getBoolean("proactiveSuggestions", d.proactiveSuggestions),
             autoSendDelaySec = prefs.getInt("autoSendDelaySec", d.autoSendDelaySec),
-            autoReplyGroups = prefs.getBoolean("autoReplyGroups", d.autoReplyGroups),
-            autoReplyOtherApps = prefs.getBoolean("autoReplyOtherApps", d.autoReplyOtherApps),
+            // v1.0.2 made Auto mode cover every chat, so an install that stored the old
+            // opt-out defaults is switched over once.
+            autoReplyGroups = migratedToAllChats(prefs.getBoolean("autoReplyGroups", d.autoReplyGroups)),
+            autoReplyOtherApps = migratedToAllChats(prefs.getBoolean("autoReplyOtherApps", d.autoReplyOtherApps)),
             autoCooldownMin = prefs.getInt("autoCooldownMin", d.autoCooldownMin),
             appendSignature = prefs.getBoolean("appendSignature", d.appendSignature),
             watchAllApps = prefs.getBoolean("watchAllApps", d.watchAllApps),
@@ -97,6 +100,12 @@ class Settings(context: Context) {
             readWhatsAppScreen = prefs.getBoolean("readWhatsAppScreen", d.readWhatsAppScreen),
             searchEngine = runCatching { SearchEngine.valueOf(prefs.getString("searchEngine", d.searchEngine.name)!!) }.getOrDefault(d.searchEngine),
         )
+    }
+
+    private fun migratedToAllChats(stored: Boolean): Boolean {
+        if (prefs.getBoolean("allChatsMigrated", false)) return stored
+        prefs.edit().putBoolean("allChatsMigrated", true).apply()
+        return true
     }
 
     fun update(transform: (SettingsData) -> SettingsData) {

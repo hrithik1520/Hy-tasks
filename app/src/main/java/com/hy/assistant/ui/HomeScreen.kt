@@ -121,7 +121,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Hy Assistant") },
+                title = { Text("Alfrid") },
                 actions = {
                     IconButton(onClick = openSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                 },
@@ -139,7 +139,7 @@ fun HomeScreen(
                     SectionCard {
                         Text("Step 1 · Allow notification access", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Hy reads your notifications on this phone to summarize and reply. Nothing leaves the device.",
+                            "Alfrid reads your notifications on this phone to summarize and reply. Nothing leaves the device.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                         Spacer(Modifier.padding(4.dp))
@@ -165,7 +165,7 @@ fun HomeScreen(
             if (!canNotify && Build.VERSION.SDK_INT >= 33) {
                 item {
                     SectionCard {
-                        Text("Allow Hy's notifications", style = MaterialTheme.typography.titleMedium)
+                        Text("Allow Alfrid's notifications", style = MaterialTheme.typography.titleMedium)
                         Text(
                             "Needed to show suggested replies with a Send button, and auto-reply alerts.",
                             style = MaterialTheme.typography.bodySmall,
@@ -194,13 +194,14 @@ fun HomeScreen(
                     Spacer(Modifier.padding(4.dp))
                     Text(
                         if (settings.replyMode == ReplyMode.AUTO) {
-                            "Hy replies by itself ${if (settings.autoSendDelaySec > 0) "after ${settings.autoSendDelaySec}s (tap Cancel to stop)" else "immediately"}. " +
+                            "In every chat, Alfrid asks whoever writes in whether they have a message for you, then confirms it'll reach you " +
+                                "${if (settings.autoSendDelaySec > 0) "(sent after ${settings.autoSendDelaySec}s — tap Cancel to stop)" else "(sent immediately)"}. " +
                                 "Never for OTPs, money, passwords or emergencies" +
                                 (if (!settings.autoReplyGroups) ", or group chats" else "") + " — those come to you as suggestions."
                         } else if (settings.proactiveSuggestions) {
-                            "Hy drafts a reply for every new message and shows it as a notification. Tap Send — no need to open the app."
+                            "Alfrid drafts a reply for every new message and shows it as a notification. Tap Send — no need to open the app."
                         } else {
-                            "Hy only drafts replies when you ask."
+                            "Alfrid only drafts replies when you ask."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -287,7 +288,7 @@ fun HomeScreen(
                             Text(
                                 when {
                                     agentMode -> "Give the agent a multi-step task…"
-                                    turns.isEmpty() -> "Ask or tell Hy anything…"
+                                    turns.isEmpty() -> "Ask or tell Alfrid anything…"
                                     else -> "Ask a follow-up…"
                                 },
                             )
@@ -319,7 +320,7 @@ fun HomeScreen(
 
             // ---- What Hy did on its own ----------------------------------------------
             if (activity.isNotEmpty()) {
-                item { Header("Hy activity") }
+                item { Header("Alfrid activity") }
                 items(activity.take(5)) { e -> ActivityRow(e) }
             }
 
@@ -374,7 +375,7 @@ private fun SharedCard(sh: MainViewModel.Shared, onAsk: (String) -> Unit, onDism
     var question by rememberSaveable(sh) { mutableStateOf("") }
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (sh.fromScreen) "On your screen" else "Shared with Hy", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(if (sh.fromScreen) "On your screen" else "Shared with Alfrid", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             TextButton(onClick = onDismiss) { Text("✕") }
         }
         Text(sh.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
@@ -434,6 +435,7 @@ private fun Header(text: String) {
 private fun ActivityRow(e: ActivityLog.Entry) {
     val color = when (e.kind) {
         ActivityLog.Kind.AUTO_SENT, ActivityLog.Kind.SENT -> MaterialTheme.colorScheme.primary
+        ActivityLog.Kind.MESSAGE -> MaterialTheme.colorScheme.tertiary
         ActivityLog.Kind.FAILED -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
