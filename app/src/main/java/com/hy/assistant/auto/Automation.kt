@@ -6,6 +6,7 @@ import android.util.Log
 import com.hy.assistant.ReplyMode
 import com.hy.assistant.Settings
 import com.hy.assistant.core.AutoDecision
+import com.hy.assistant.core.AutoReply
 import com.hy.assistant.core.AutomationPolicy
 import com.hy.assistant.core.Prompts
 import com.hy.assistant.llm.LlamaEngine
@@ -93,8 +94,19 @@ class Automation(
         } else {
             Prompts.draftReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, styleRules = ReplyStyle.promptRules(chat, s))
         }
-        val raw = withWakeLock { llm.withLock { engine.complete(model, prompt, s.threads, s.contextSize) } }
-        val text = ReplyStyle.finish(raw, chat, s)
+        val holdSeed = (System.currentTimeMillis() / 60_000L).toInt() + chat.key.hashCode()
+        // Auto: questions/requests aimed at the user are held by rule (no AI needed); otherwise the
+        // model only chooses hold/reply, and a hold sends a holding message, never invented facts.
+        val quick = if (sendAutomatically) pendingIncoming.lastOrNull()?.let { AutoReply.quickReply(it.text) } else null
+        val draft = if (sendAutomatically && pendingIncoming.any { AutoReply.mustHold(it.text) }) {
+            AutoReply.holdingText(holdSeed)
+        } else if (quick != null) {
+            quick
+        } else {
+            val raw = withWakeLock { llm.withLock { engine.complete(model, prompt, s.threads, s.contextSize) } }
+            if (sendAutomatically) AutoReply.replyText(raw) ?: AutoReply.holdingText(holdSeed) else raw
+        }
+        val text = ReplyStyle.finish(draft, chat, s)
         if (text.isBlank()) return
 
         // The user may have replied themselves while we were thinking.

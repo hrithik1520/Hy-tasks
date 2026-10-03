@@ -36,6 +36,10 @@ class AutomationPolicyTest {
         assertEquals(AutoDecision.None, d(base.copy(chatName = "56767")))
         assertEquals(AutoDecision.None, d(base.copy(canReply = false)))
         assertEquals(AutoDecision.None, d(base.copy(chatSetting = ChatSetting.OFF)))
+        assertEquals(AutoDecision.None, d(base.copy(globalAuto = true, incoming = listOf("Poya", "Savu ninna"))))
+        assertEquals(AutoDecision.None, d(base.copy(incoming = listOf("नमस्ते कैसे हो"))))
+        assertEquals(AutoDecision.Auto, d(base.copy(globalAuto = true, incoming = listOf("Savu ninna", "what are you doing"))))
+        assertEquals(AutoDecision.Auto, d(base.copy(globalAuto = true, incoming = listOf("👍"))))
     }
 
     @Test

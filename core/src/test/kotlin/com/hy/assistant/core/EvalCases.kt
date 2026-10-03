@@ -69,6 +69,36 @@ class EvalCases {
             "w-answer-1", "answer",
             Agent.answerPrompt("give me 3 tips to save money, as a short list", "", "Hrithik"), emptyMap(),
         )
+        // --- Context-fit replies (from a real bad auto-reply, 2 Oct 2026) ------------------------
+        // "any": at least one must appear; "none": none may appear (comma-separated).
+        fun reply(id: String, chat: String, lines: List<ChatLine>, any: String, none: String = "", auto: Boolean = true, kind: String = "hold") {
+            if (auto) {
+                // Auto: the model must choose hold vs reply; reply text is checked like a draft.
+                out += Case(id, "autoreply", Prompts.autoReply(chat, lines, "Hrithik", Tone.CASUAL, Humanizer.PROMPT_RULES),
+                    mapOf("kind" to kind, "any" to any, "none" to none))
+            } else {
+                out += Case(id, "reply", Prompts.draftReply(chat, lines, "Hrithik", Tone.CASUAL, styleRules = Humanizer.PROMPT_RULES),
+                    mapOf("any" to any, "none" to none))
+            }
+        }
+        val youChat = listOf(
+            ChatLine("You", ".", 1, false),
+            ChatLine("Me", "Hey, I'll check your message later.\n— sent by my assistant", 2, true),
+            ChatLine("You", "What are you doing", 3, false),
+        )
+        val busyWords = "busy,doing,working,free,bit,soon,later,nothing,chill,just,call,text you"
+        // Questions aimed at the user are held by AutoReply.mustHold (unit-tested), so the model only
+        // sees the rest: statements, wishes and acknowledgements.
+        reply("c-you-draft", "You", youChat, busyWords, "no worries,when you're free,when you are free", auto = false)
+        reply("c-bday", "Priya", listOf(ChatLine("Priya", "happy birthday!! 🎉 have a great day", 1, false)), "thank", "happy birthday", kind = "reply")
+        reply("c-see-you", "Rahul", listOf(
+            ChatLine("Me", "let's meet at 8 near the station", 1, true),
+            ChatLine("Rahul", "ok see you at 8", 2, false),
+        ), "see you,ok,sure,cool,done,great,sounds good,👍", "no worries", kind = "reply")
+        reply("c-coming-draft", "Mom", listOf(ChatLine("Mom", "are you coming home for dinner?", 1, false)), "dinner,home,coming,let you know,soon,later,yes,bit", "", auto = false)
+        reply("c-news", "Rahul", listOf(ChatLine("Rahul", "bro i got the job!!", 1, false)), "congrat,awesome,great,amazing,proud,wow", "", kind = "reply")
+        reply("c-traffic", "Priya", listOf(ChatLine("Priya", "stuck in traffic, will be 10 mins late", 1, false)), "no problem,no worries,ok,sure,take your time,np,sorry to hear,hope,drive safe", "sorry for the delay,i'm late,i'll be late,i'm running late", kind = "reply")
+        reply("c-gm", "Dad", listOf(ChatLine("Dad", "good night beta, sleep well", 1, false)), "night,sleep", "", kind = "reply")
         return out
     }
 
@@ -80,7 +110,7 @@ class EvalCases {
             sb.append("{")
                 .append("\"id\":").append(q(c.id)).append(",\"kind\":").append(q(c.kind))
                 .append(",\"system\":").append(q(c.prompt.system)).append(",\"user\":").append(q(c.prompt.user))
-                .append(",\"grammar\":").append(q(c.prompt.grammar ?: "")).append(",\"max\":").append(c.prompt.maxTokens)
+                .append(",\"grammar\":").append(q(c.prompt.grammar ?: "")).append(",\"max\":").append(c.prompt.maxTokens).append(",\"temp\":").append(c.prompt.temperature)
                 .append(",\"expect\":{").append(c.expect.entries.joinToString(",") { q(it.key) + ":" + q(it.value) }).append("}}\n")
         }
         java.io.File(path).writeText(sb.toString())

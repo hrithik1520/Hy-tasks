@@ -40,8 +40,8 @@ class SafetyFilterTest {
     @Test
     fun autoReplyPromptForbidsCommitments() {
         val p = Prompts.autoReply("Rahul", listOf(ChatLine("Rahul", "can you come tomorrow at 6?", 1, false)), "Hrithik", Tone.CASUAL)
-        assertTrue(p.system.contains("Never invent facts"))
-        assertTrue(p.system.contains("holding message"))
+        assertTrue(p.system.contains("do NOT know"))
+        assertTrue(p.grammar == AutoReply.GRAMMAR && p.temperature == 0f)
         assertTrue(p.user.contains("can you come tomorrow at 6?"))
     }
 }

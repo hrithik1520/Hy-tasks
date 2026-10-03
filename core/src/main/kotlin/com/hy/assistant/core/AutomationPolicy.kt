@@ -41,6 +41,8 @@ object AutomationPolicy {
         val block = i.incoming.firstNotNullOfOrNull { SafetyFilter.blockReason(it) }
         // Nothing sensible to reply to a code or a password request: stay quiet.
         if (block == SafetyFilter.Reason.OTP || block == SafetyFilter.Reason.CREDENTIALS) return AutoDecision.None
+        // The model only understands English: don't guess a reply to "Savu ninna".
+        if (i.incoming.none { Language.looksEnglish(it) }) return AutoDecision.None
 
         val explicit = i.chatSetting == ChatSetting.AUTO || i.chatSetting == ChatSetting.MANUAL
         if (!explicit && i.isGroup && !i.includeGroups) return AutoDecision.None

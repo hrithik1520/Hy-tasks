@@ -29,11 +29,28 @@ def check(r):
             elif str(d.get(key, "")).lower() != want.lower():
                 return False, f"{key}={d.get(key)!r}"
         return True, ""
+    if k == "autoreply":
+        d = flat(out)
+        if not isinstance(d, dict):
+            return False, "invalid JSON"
+        if d.get("kind") != exp.get("kind"):
+            return False, f"kind={d.get('kind')!r} want {exp.get('kind')}"
+        if d.get("kind") == "hold":
+            return True, ""
+        k, out = "reply", d.get("text", "")
     tells = [t for t in TELLS if re.search(t, out, re.I)]
     if k == "reply":
         sentences = len(re.findall(r"[.!?](\s|$)", out.strip())) or 1
         if tells:
             return False, "tells: " + ", ".join(tells)
+        low = out.lower()
+        anyw = [w for w in exp.get("any", "").split(",") if w]
+        nonew = [w for w in exp.get("none", "").split(",") if w]
+        if anyw and not any(w in low for w in anyw):
+            return False, "off-topic (none of: " + ", ".join(anyw[:4]) + "…)"
+        bad = [w for w in nonew if w in low]
+        if bad:
+            return False, "wrong: " + ", ".join(bad)
         if sentences > 2 or len(out) > 220:
             return False, f"too long ({len(out)} chars)"
         return bool(out.strip()), ""

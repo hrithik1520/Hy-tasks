@@ -94,15 +94,24 @@ int main(int argc, char **argv) {
 
     if (argc > 3 && strcmp(argv[2], "--eval") == 0) {
         // Runs eval cases (JSON lines from EvalCases.kt) greedily; prints one JSON result per line.
+        // Optional: --eval <file> <runs>  → each case runs <runs> times with the app's temperature
+        // (seeds 1..runs) instead of once greedily, to measure how often sampling goes wrong.
+        int runs = argc > 4 ? atoi(argv[4]) : 0;
         std::ifstream in(argv[3]);
         std::string line;
+        std::vector<nlohmann::json> cases;
         while (std::getline(in, line)) {
             if (line.empty()) continue;
             auto c = nlohmann::json::parse(line);
+            if (runs <= 0) { cases.push_back(c); continue; }
+            for (int r = 1; r <= runs; r++) { c["seed"] = r; cases.push_back(c); }
+        }
+        for (auto &c : cases) {
             hy::GenParams p;
             p.n_ctx = 4096;
             p.n_threads = 6;
-            p.temperature = 0;
+            p.temperature = c.contains("seed") ? c.value("temp", 0.0f) : 0.0f;
+            if (c.contains("seed")) p.seed = c["seed"].get<unsigned>();
             p.max_tokens = c["max"].get<int>();
             p.grammar = c["grammar"].get<std::string>();
             std::string out;
@@ -110,7 +119,7 @@ int main(int argc, char **argv) {
             int n = hy::generate(e, 0, c["system"].get<std::string>(), c["user"].get<std::string>(), p,
                                  [&](const std::string &s) { out += s; return true; });
             long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
-            nlohmann::json r = {{"id", c["id"]}, {"kind", c["kind"]}, {"expect", c["expect"]}, {"out", out}, {"n", n}, {"ms", ms},
+            nlohmann::json r = {{"id", c["id"].get<std::string>() + (c.contains("seed") ? "#" + std::to_string(c["seed"].get<int>()) : "")}, {"kind", c["kind"]}, {"expect", c["expect"]}, {"out", out}, {"n", n}, {"ms", ms},
                                 {"err", n < 0 ? hy::last_error() : ""}};
             std::cout << r.dump() << std::endl;
         }
