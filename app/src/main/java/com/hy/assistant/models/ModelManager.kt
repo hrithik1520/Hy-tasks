@@ -52,7 +52,7 @@ class ModelManager(
             fileName = "qwen2.5-1.5b-instruct-q4_k_m.gguf",
             url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
             sizeMb = 1120,
-            note = "Best balance on Nothing Phone (3a) Pro: fast, good replies, and agent steps reuse work (27/32 in Hy's tests).",
+            note = "Best balance on Nothing Phone (3a) Pro: fast, good replies, and agent steps reuse work (27/32 in Alfrid's tests).",
             license = "Apache 2.0",
         ),
         CatalogModel(
@@ -70,7 +70,43 @@ class ModelManager(
             fileName = "Qwen3.5-2B-Q4_K_M.gguf",
             url = "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf",
             sizeMb = 1280,
-            note = "Newest model: best at commands and agent planning (31/32 in Hy's tests vs 27/32), but about 4-5x slower on phone CPUs.",
+            note = "Newest model: best at commands and agent planning (31/32 in Alfrid's tests vs 27/32), but about 4-5x slower on phone CPUs.",
+            license = "Apache 2.0",
+        ),
+        CatalogModel(
+            id = "qwen3.5-0.8b",
+            title = "Qwen3.5 0.8B (fastest)",
+            fileName = "Qwen3.5-0.8B-Q4_K_M.gguf",
+            url = "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf",
+            sizeMb = 508,
+            note = "Smallest download and the quickest replies. Weakest writing of the three Qwen3.5 sizes.",
+            license = "Apache 2.0",
+        ),
+        CatalogModel(
+            id = "qwen3.5-4b",
+            title = "Qwen3.5 4B (best writing)",
+            fileName = "Qwen3.5-4B-Q4_K_M.gguf",
+            url = "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf",
+            sizeMb = 2614,
+            note = "Best for back-and-forth chat, slowest of the Qwen3.5 sizes. Needs ~3 GB RAM free.",
+            license = "Apache 2.0",
+        ),
+        CatalogModel(
+            id = "gemma4-e2b",
+            title = "Gemma 4 E2B it (Google, QAT)",
+            fileName = "gemma-4-E2B-it-qat-Q4_K_XL.gguf",
+            url = "https://huggingface.co/unsloth/gemma-4-E2B-it-qat-GGUF/resolve/main/gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf",
+            sizeMb = 2499,
+            note = "Warmer, more natural writing. \"E2B\" is 5B weights, so it needs ~3 GB RAM free. Trained for 4-bit, so little is lost.",
+            license = "Apache 2.0",
+        ),
+        CatalogModel(
+            id = "gemma4-e4b",
+            title = "Gemma 4 E4B it (Google, QAT)",
+            fileName = "gemma-4-E4B-it-qat-Q4_K_XL.gguf",
+            url = "https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF/resolve/main/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
+            sizeMb = 4020,
+            note = "Strongest writing here, and the slowest: 8B weights, so only on a 12 GB phone. Try E2B first.",
             license = "Apache 2.0",
         ),
     )
@@ -108,7 +144,7 @@ class ModelManager(
         File(modelsDir, "$name.part").delete()
         val id = try {
             val request = DownloadManager.Request(Uri.parse(url))
-                .setTitle("Hy Assistant model: $name")
+                .setTitle("Alfrid model: $name")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setDestinationInExternalFilesDir(context, "models", "$name.part")
                 .setAllowedOverMetered(true)
