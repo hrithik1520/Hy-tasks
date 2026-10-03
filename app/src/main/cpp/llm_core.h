@@ -14,8 +14,9 @@ struct GenParams {
     int n_threads = 4;
     int max_tokens = 256;
     float temperature = 0.7f;
-    float top_p = 0.9f;
-    int top_k = 40;
+    // Qwen3.5 non-thinking defaults; also fine for Qwen2.5.
+    float top_p = 0.8f;
+    int top_k = 20;
     unsigned int seed = 0xFFFFFFFF;  // LLAMA_DEFAULT_SEED -> random
     // Optional GBNF grammar (root rule "root") that constrains the output, e.g. to JSON actions.
     std::string grammar;

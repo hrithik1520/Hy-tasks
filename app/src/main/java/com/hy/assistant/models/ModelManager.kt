@@ -47,31 +47,60 @@ class ModelManager(
 ) {
     val catalog = listOf(
         CatalogModel(
-            id = "qwen2.5-1.5b",
-            title = "Qwen2.5 1.5B Instruct (recommended)",
-            fileName = "qwen2.5-1.5b-instruct-q4_k_m.gguf",
-            url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
-            sizeMb = 1120,
-            note = "Best balance on Nothing Phone (3a) Pro. Good summaries and replies.",
+            id = "qwen3.5-2b",
+            title = "Qwen3.5 2B Instruct (recommended)",
+            fileName = "qwen3.5-2b-q4_k_m.gguf",
+            url = "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf",
+            sizeMb = 1222,
+            note = "Best balance on Nothing Phone (3a) Pro. Replies in English, Hindi and Hinglish.",
             license = "Apache 2.0",
         ),
         CatalogModel(
-            id = "qwen2.5-0.5b",
-            title = "Qwen2.5 0.5B Instruct (fast)",
-            fileName = "qwen2.5-0.5b-instruct-q4_k_m.gguf",
-            url = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
-            sizeMb = 400,
+            id = "qwen3.5-0.8b",
+            title = "Qwen3.5 0.8B Instruct (fast)",
+            fileName = "qwen3.5-0.8b-q4_k_m.gguf",
+            url = "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf",
+            sizeMb = 508,
             note = "Very fast, small download. Noticeably weaker writing.",
             license = "Apache 2.0",
         ),
         CatalogModel(
-            id = "qwen2.5-3b",
-            title = "Qwen2.5 3B Instruct (best quality)",
-            fileName = "qwen2.5-3b-instruct-q4_k_m.gguf",
-            url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
-            sizeMb = 2100,
-            note = "Better writing but ~2x slower and uses ~2.5 GB RAM.",
-            license = "Qwen Research License (personal / non-commercial)",
+            id = "qwen3.5-4b",
+            title = "Qwen3.5 4B Instruct (best quality)",
+            fileName = "qwen3.5-4b-q4_k_m.gguf",
+            url = "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf",
+            sizeMb = 2614,
+            note = "Best for back-and-forth chat. ~2x slower and needs ~3 GB RAM free.",
+            license = "Apache 2.0",
+        ),
+        CatalogModel(
+            id = "gemma4-e2b",
+            title = "Gemma 4 E2B it (Google, QAT)",
+            fileName = "gemma-4-e2b-it-qat-q4_k_xl.gguf",
+            url = "https://huggingface.co/unsloth/gemma-4-E2B-it-qat-GGUF/resolve/main/gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf",
+            sizeMb = 2499,
+            note = "Warmer, more natural writing. \"E2B\" is 5B weights, so it needs ~3 GB RAM free " +
+                "and is slower than Qwen3.5 2B. Quantization-aware, so 4-bit costs little quality.",
+            license = "Apache 2.0",
+        ),
+        CatalogModel(
+            id = "gemma4-e4b",
+            title = "Gemma 4 E4B it (Google, QAT)",
+            fileName = "gemma-4-e4b-it-qat-q4_k_xl.gguf",
+            url = "https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF/resolve/main/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
+            sizeMb = 4020,
+            note = "Strongest writing in this list. 8B weights — only on a 12 GB phone, and expect " +
+                "20 s+ per reply. Try E2B first.",
+            license = "Apache 2.0",
+        ),
+        CatalogModel(
+            id = "qwen2.5-1.5b",
+            title = "Qwen2.5 1.5B Instruct (older)",
+            fileName = "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            sizeMb = 1120,
+            note = "The previous default. Keep it to compare against Qwen3.5 2B.",
+            license = "Apache 2.0",
         ),
     )
 
@@ -108,7 +137,7 @@ class ModelManager(
         File(modelsDir, "$name.part").delete()
         val id = try {
             val request = DownloadManager.Request(Uri.parse(url))
-                .setTitle("Hy Assistant model: $name")
+                .setTitle("Alfrid model: $name")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setDestinationInExternalFilesDir(context, "models", "$name.part")
                 .setAllowedOverMetered(true)

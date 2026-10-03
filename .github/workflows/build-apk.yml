@@ -3,6 +3,7 @@ name: Build APK
 on:
   push:
     branches: ["**"]
+    tags: ["v*"]
     paths-ignore: ["docs/**", "**.md"]
   workflow_dispatch:
 
@@ -17,10 +18,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      VERSION_NAME: 0.1.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
+
+      # A tag release is named after the tag (v1.0.2 -> 1.0.2); branch builds stay 0.1.<run>.
+      - name: Work out the version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION_NAME=0.1.${{ github.run_number }}" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/setup-java@v4
         with:
@@ -48,15 +56,15 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk out/HyAssistant.apk
+          cp app/build/outputs/apk/release/app-release.apk out/Alfrid.apk
           ls -la out
 
       - name: Verify APK (signature + 16 KB native alignment)
         run: |
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$BT/apksigner" verify --verbose out/HyAssistant.apk | head -5
-          "$BT/zipalign" -c -P 16 -v 4 out/HyAssistant.apk | tail -2
-          mkdir -p so && unzip -o -q out/HyAssistant.apk 'lib/*' -d so
+          "$BT/apksigner" verify --verbose out/Alfrid.apk | head -5
+          "$BT/zipalign" -c -P 16 -v 4 out/Alfrid.apk | tail -2
+          mkdir -p so && unzip -o -q out/Alfrid.apk 'lib/*' -d so
           for f in so/lib/*/*.so; do
             align=$(readelf -lW "$f" | awk '/LOAD/ {print $NF}' | sort -u)
             echo "$f -> $align"
@@ -65,17 +73,17 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: HyAssistant-${{ env.VERSION_NAME }}
-          path: out/HyAssistant.apk
+          name: Alfrid-${{ env.VERSION_NAME }}
+          path: out/Alfrid.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION_NAME }}
-          name: Hy Assistant ${{ env.VERSION_NAME }}
+          name: Alfrid ${{ env.VERSION_NAME }}
           target_commitish: ${{ github.sha }}
           make_latest: "true"
-          files: out/HyAssistant.apk
+          files: out/Alfrid.apk
           body: |
-            Install on your phone: download **HyAssistant.apk** below, open it, and allow "Install unknown apps" for your browser/Files app when asked.
+            Install on your phone: download **Alfrid.apk** below, open it, and allow "Install unknown apps" for your browser/Files app when asked.
             Built from ${{ github.sha }}.
