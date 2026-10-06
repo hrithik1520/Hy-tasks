@@ -2,6 +2,7 @@ package com.hy.assistant.ui
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -89,6 +90,8 @@ fun HomeScreen(
     val output by vm.output.collectAsState()
     val proposal by vm.proposal.collectAsState()
     val disambiguation by vm.disambiguation.collectAsState()
+    val confirm by vm.confirm.collectAsState()
+    val ignoringBattery by vm.ignoringBattery.collectAsState()
     var command by rememberSaveable { mutableStateOf("") }
     val turns by vm.turns.collectAsState()
     val pendingRequest by vm.pendingRequest.collectAsState()
@@ -172,6 +175,28 @@ fun HomeScreen(
                         )
                         Spacer(Modifier.padding(4.dp))
                         Button(onClick = { notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }) { Text("Allow") }
+                    }
+                }
+            }
+
+            if (listenerEnabled && !ignoringBattery) {
+                item {
+                    SectionCard {
+                        Text("Let Hy work while the phone sleeps", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Without this, Android may pause Hy when the screen is off, so replies can come late or not at all.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(Modifier.padding(4.dp))
+                        Button(onClick = {
+                            val request = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            try {
+                                context.startActivity(request)
+                            } catch (e: Exception) {
+                                context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            }
+                        }) { Text("Allow") }
                     }
                 }
             }
@@ -268,6 +293,7 @@ fun HomeScreen(
             savedFile?.let { f ->
                 item { SavedFileBar(f, { vm.openSaved(f) }, { vm.shareSaved(f) }, vm::dismissSaved) }
             }
+            confirm?.let { c -> item { ConfirmCard(c, vm::confirmPending, vm::dismissConfirm) } }
             disambiguation?.let { d -> item { DisambiguationCard(d, vm::chooseCandidate, vm::dismissDisambiguation) } }
             proposal?.let { p ->
                 item { ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal) }

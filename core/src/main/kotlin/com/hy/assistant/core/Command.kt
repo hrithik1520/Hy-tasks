@@ -91,7 +91,7 @@ object CommandParser {
             if (name != null) {
                 val gistStart = lower.length - rest.length + name.second.length
                 val gist = original.substring(gistStart).trim().removePrefix(",").removePrefix(":").trim()
-                if (gist.isNotEmpty()) return Command.Reply(name.first, gist)
+                if (gist.isNotEmpty()) return Command.Reply(name.first, imperative(gist))
             }
         }
         summarize.matchEntire(lower)?.let { m ->
@@ -100,6 +100,19 @@ object CommandParser {
         return Command.Unknown(text)
     }
 
+    private val trailingNoun = Regex("""\s+(?:an?\s+)?(?:message|msg|text|reply|note|sms)$""")
+
     private fun cleanContact(raw: String): String =
-        raw.trim().removePrefix("the ").removeSuffix("'s").removeSuffix(" chat").trim()
+        raw.trim().removePrefix("the ").replace(trailingNoun, "").removeSuffix("'s").removeSuffix(" chat").trim()
+
+    /** "tell Rahul to call me" -> the message "Please call me" (not the literal "to call me"). */
+    private fun imperative(gist: String): String {
+        if (!gist.lowercase().startsWith("to ")) return gist
+        val rest = gist.drop(3).trim()
+        return when {
+            rest.isEmpty() -> gist
+            rest.lowercase().startsWith("not ") -> "Please don't " + rest.drop(4).trim()
+            else -> "Please $rest"
+        }
+    }
 }

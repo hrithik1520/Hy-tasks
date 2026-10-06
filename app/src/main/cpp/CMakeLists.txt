@@ -23,7 +23,9 @@ set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
 if(ANDROID_ABI STREQUAL "arm64-v8a")
-    # Cortex-A78/A55 class cores (e.g. Dimensity 7300 in Nothing Phone 3a Pro).
+    # Safe baseline for every recent arm64 phone (Armv8.2 + dot product + fp16). The Nothing Phone (3a) Pro's
+    # Snapdragon 7s Gen 3 (Cortex-A720/A520) supports more (e.g. int8 matrix multiply); using it needs
+    # runtime CPU-variant selection so older phones don't crash, which is not enabled yet.
     set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "" FORCE)
 endif()
 

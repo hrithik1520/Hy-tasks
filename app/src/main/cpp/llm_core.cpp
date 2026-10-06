@@ -1,6 +1,7 @@
 #include "llm_core.h"
 
 #include <algorithm>
+#include <exception>
 #include <vector>
 
 #include "llama.h"
@@ -27,28 +28,47 @@ int utf8_seq_len(unsigned char c) {
 
 const std::string &last_error() { return g_last_error; }
 
-void backend_init() { llama_backend_init(); }
+void set_last_error(const std::string &msg) { set_error(msg); }
+
+void backend_init() {
+    try {
+        llama_backend_init();
+    } catch (...) {
+        set_error("Backend init failed");
+    }
+}
 
 Engine *open(const std::string &path) {
-    llama_model_params mp = llama_model_default_params();
-    mp.n_gpu_layers = 0;  // CPU only on phones
-    llama_model *model = llama_model_load_from_file(path.c_str(), mp);
-    if (!model) {
-        set_error("Failed to load model: " + path);
-        return nullptr;
+    try {
+        llama_model_params mp = llama_model_default_params();
+        mp.n_gpu_layers = 0;  // CPU only on phones
+        llama_model *model = llama_model_load_from_file(path.c_str(), mp);
+        if (!model) {
+            set_error("Failed to load model: " + path);
+            return nullptr;
+        }
+        Engine *e = new Engine();
+        e->model = model;
+        return e;
+    } catch (const std::exception &e) {
+        set_error(std::string("Native error while loading model: ") + e.what());
+    } catch (...) {
+        set_error("Native error while loading model");
     }
-    Engine *e = new Engine();
-    e->model = model;
-    return e;
+    return nullptr;
 }
 
 void close(Engine *engine) {
     if (!engine) return;
-    for (Session &s : engine->sessions) {
-        if (s.ctx) llama_free(s.ctx);
+    try {
+        for (Session &s : engine->sessions) {
+            if (s.ctx) llama_free(s.ctx);
+        }
+        if (engine->model) llama_model_free(engine->model);
+        delete engine;
+    } catch (...) {
+        set_error("Native error while closing model");
     }
-    if (engine->model) llama_model_free(engine->model);
-    delete engine;
 }
 
 int last_reused(Engine *engine, int slot) {
@@ -125,8 +145,10 @@ void reset_cache(Session &s) {
 
 }  // namespace
 
-int generate(Engine *engine, int slot, const std::string &system, const std::string &user,
-             const GenParams &p, const TextCallback &on_text) {
+namespace {
+
+int generate_impl(Engine *engine, int slot, const std::string &system, const std::string &user,
+                  const GenParams &p, const TextCallback &on_text) {
     if (!engine || !engine->model) {
         set_error("Model not loaded");
         return -1;
@@ -183,11 +205,15 @@ int generate(Engine *engine, int slot, const std::string &system, const std::str
     llama_sampler_chain_params sp = llama_sampler_chain_default_params();
     sp.no_perf = true;
     llama_sampler *smpl = llama_sampler_chain_init(sp);
+    // Frees the sampler chain on every exit, including a C++ exception unwinding through here.
+    struct SamplerGuard {
+        llama_sampler *s;
+        ~SamplerGuard() { llama_sampler_free(s); }
+    } sampler_guard{smpl};
     if (!p.grammar.empty()) {
         llama_sampler *g = llama_sampler_init_grammar(vocab, p.grammar.c_str(), "root");
         if (!g) {
             set_error("Invalid grammar");
-            llama_sampler_free(smpl);
             return -6;
         }
         llama_sampler_chain_add(smpl, g);
@@ -229,8 +255,32 @@ int generate(Engine *engine, int slot, const std::string &system, const std::str
     }
     if (!pending.empty() && result >= 0) on_text(pending);
 
-    llama_sampler_free(smpl);
     return result;
+}
+
+}  // namespace
+
+int generate(Engine *engine, int slot, const std::string &system, const std::string &user,
+             const GenParams &params, const TextCallback &on_text) {
+    // llama.cpp's grammar sampler can throw while sampling, and so can a callback. Turn any
+    // exception into an error code: letting one reach the JVM terminates the whole app.
+    try {
+        return generate_impl(engine, slot, system, user, params, on_text);
+    } catch (const std::exception &e) {
+        set_error(std::string("Native error: ") + e.what());
+    } catch (...) {
+        set_error("Native error: unknown exception");
+    }
+    // The slot's KV cache may no longer match what the model actually holds: start it from scratch.
+    if (engine && engine->model) {
+        Session &s = engine->sessions[(slot < 0 || slot >= kSlots) ? 0 : slot];
+        try {
+            if (s.ctx) reset_cache(s);
+        } catch (...) {
+        }
+        s.cached.clear();  // an empty cache makes the next call drop the whole KV sequence
+    }
+    return -7;
 }
 
 }  // namespace hy

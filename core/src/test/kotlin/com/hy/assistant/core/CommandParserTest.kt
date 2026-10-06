@@ -51,4 +51,19 @@ class CommandParserTest {
         assertIs<Command.Unknown>(CommandParser.parse("open the camera"))
         assertIs<Command.Unknown>(CommandParser.parse("   "))
     }
+
+    @Test
+    fun tellXToDoY() {
+        val names = listOf("Rahul", "Mom")
+        assertEquals(Command.Reply("Rahul", "Please call me"), CommandParser.parse("tell rahul to call me", names))
+        assertEquals(Command.Reply("Mom", "Please don't worry"), CommandParser.parse("tell mom to not worry", names))
+        // The explicit "to say" form keeps the user's own words.
+        assertEquals(Command.Reply("rahul", "hi"), CommandParser.parse("tell rahul to say hi", names))
+    }
+
+    @Test
+    fun sendXAMessageSaying() {
+        assertEquals(Command.Reply("rahul", "hi"), CommandParser.parse("send rahul a message saying hi"))
+        assertEquals(Command.Reply("mom", "on my way"), CommandParser.parse("send mom a text saying on my way"))
+    }
 }

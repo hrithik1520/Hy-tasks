@@ -38,4 +38,12 @@ class ContactMatcherTest {
         assertEquals(ContactMatcher.Result.NotFound, ContactMatcher.resolve("zebra", names))
         assertTrue(ContactMatcher.rank("", names).isEmpty())
     }
+
+    @Test
+    fun exactNameBeatsLongerNames() {
+        assertEquals(ContactMatcher.Result.Unique("Rahul"), ContactMatcher.resolve("rahul", listOf("Rahul", "Rahul Sharma")))
+        assertEquals(ContactMatcher.Result.Unique("Mom"), ContactMatcher.resolve("mom", listOf("Mom", "Mom Office")))
+        // Two chats whose names are identical after normalizing are genuinely ambiguous.
+        assertIs<ContactMatcher.Result.Ambiguous>(ContactMatcher.resolve("mom", listOf("Mom", "Mom ❤️")))
+    }
 }

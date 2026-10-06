@@ -65,7 +65,8 @@ class Settings(context: Context) {
         return SettingsData(
             userName = prefs.getString("userName", d.userName) ?: "",
             tone = runCatching { Tone.valueOf(prefs.getString("tone", d.tone.name)!!) }.getOrDefault(d.tone),
-            // Dimensity 7300: 4 big A78 cores + 4 little A55 cores; 4 threads keeps work on the big cores.
+            // Nothing Phone (3a) Pro (Snapdragon 7s Gen 3): 4 performance cores (A720) + 4 efficiency cores (A520).
+            // 4 threads matches the performance cores; Android may still schedule them anywhere.
             threads = prefs.getInt("threads", d.threads),
             contextSize = prefs.getInt("contextSize", d.contextSize).let { stored ->
                 // One-time bump of the old 2048 default (v0.1.6 added conversation memory).

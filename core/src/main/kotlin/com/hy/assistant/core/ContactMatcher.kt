@@ -26,6 +26,10 @@ object ContactMatcher {
     fun resolve(query: String, names: Collection<String>): Result {
         val ranked = rank(query, names)
         if (ranked.isEmpty()) return Result.NotFound
+        // An exact (normalized) name beats longer names that merely contain it: "Mom" vs "Mom Office".
+        val exact = ranked.filter { it.score >= 1.0 }
+        if (exact.size == 1) return Result.Unique(exact[0].name)
+        if (exact.size > 1) return Result.Ambiguous(exact.map { it.name }.take(5))
         val top = ranked[0]
         val runnerUp = ranked.getOrNull(1)
         return if (runnerUp == null || top.score - runnerUp.score >= CLEAR_WIN) {

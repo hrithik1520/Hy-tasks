@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <stdexcept>
 
 #include "llama.h"
 #include <chrono>
@@ -204,7 +205,22 @@ int main(int argc, char **argv) {
     CHECK(n > 0 && (out == "{\"action\":\"answer\"}" || out == "{\"action\":\"digest\"}"));
     p.grammar = "root ::= (";
     CHECK(hy::generate(e, 0, "x", "y", p, [](const std::string &) { return true; }) == -6);
-    printf("grammar ok\nall native tests passed\n");
+    printf("grammar ok\n");
+
+    // A C++ exception thrown mid-generation (here: from the callback; in the app it could come from
+    // llama.cpp's grammar sampler) must become error -7, not a crash, and the slot must recover.
+    std::string before = run(e, 2, sys, step2);
+    hy::GenParams q;
+    q.max_tokens = 16;
+    q.n_ctx = 1024;
+    q.temperature = 0;
+    int rc = hy::generate(e, 2, sys, step2, q, [](const std::string &) -> bool { throw std::runtime_error("boom"); });
+    printf("[exception] rc=%d err=%s\n", rc, hy::last_error().c_str());
+    CHECK(rc == -7);
+    CHECK(hy::last_error().find("boom") != std::string::npos);
+    std::string after = run(e, 2, sys, step2);
+    CHECK(after == before);  // cache was reset, so the same prompt gives the same answer as before
+    printf("exception guard ok\nall native tests passed\n");
     hy::close(e);
     return 0;
 }

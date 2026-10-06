@@ -51,4 +51,23 @@ class AutomationPolicyTest {
         assertEquals(AutoDecision.None, d(base.copy(isWhatsApp = false)))
         assertEquals(AutoDecision.Suggest, d(base.copy(isWhatsApp = false, includeOtherApps = true)))
     }
+
+    @Test
+    fun distressIsNeverAnswerByABotInAnyMode() {
+        val distress = listOf("I want to kill myself")
+        val needsYou = AutoDecision.NeedsYou("someone may be in distress")
+        assertEquals(needsYou, d(base.copy(incoming = distress)))                                  // manual
+        assertEquals(needsYou, d(base.copy(incoming = distress, globalAuto = true)))               // auto
+        assertEquals(needsYou, d(base.copy(incoming = distress, canReply = false)))                // even without Send
+        assertEquals(needsYou, d(base.copy(incoming = listOf("hi", "I can't go on"))))            // in a burst
+        assertEquals(AutoDecision.None, d(base.copy(incoming = distress, chatSetting = ChatSetting.OFF)))
+    }
+
+    @Test
+    fun newSensitiveCategoriesAreHeldInAuto() {
+        val auto = base.copy(globalAuto = true)
+        assertEquals(AutoDecision.Hold("location / personal details"), d(auto.copy(incoming = listOf("send me your location"))))
+        assertEquals(AutoDecision.Hold("urgent / emergency"), d(auto.copy(incoming = listOf("need 2k urgently"))))
+        assertEquals(AutoDecision.Hold("money / payment"), d(auto.copy(incoming = listOf("can you gimme 500 rupees"))))
+    }
 }

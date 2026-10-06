@@ -51,7 +51,10 @@ void close(Engine *engine);
 
 // Formats system+user with the model's built-in chat template (falls back to
 // ChatML), then streams the assistant reply through `on_text`.
-// Returns the number of generated tokens, or a negative error code.
+// Returns the number of generated tokens, or a negative error code:
+//   -1 no model, -2 tokenization, -3 prompt too long, -4 context, -5 decode,
+//   -6 invalid grammar, -7 native exception (caught; see last_error()).
+// Never throws: a C++ exception that escaped into JNI would abort the whole app.
 int generate(Engine *engine, int slot, const std::string &system, const std::string &user,
              const GenParams &params, const TextCallback &on_text);
 
@@ -63,5 +66,6 @@ std::string format_chat(llama_model *model, const std::string &system, const std
 size_t complete_utf8_prefix(const std::string &bytes);
 
 const std::string &last_error();
+void set_last_error(const std::string &msg);
 
 }  // namespace hy

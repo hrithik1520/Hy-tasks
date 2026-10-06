@@ -61,6 +61,17 @@ object HyNotifications {
         post(context, chatKey, b)
     }
 
+    /** Sensitive message (e.g. someone in distress): Hy deliberately drafts nothing and offers no Send. */
+    fun sensitive(context: Context, chatKey: String, chatName: String, incoming: String, reason: String) {
+        val b = base(context, CH_SUGGEST, chatKey)
+            .setContentTitle("$chatName · needs you")
+            .setContentText("Hy won't reply for this one ($reason).")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("“${incoming.take(200)}”\n\nHy didn't draft or send anything: $reason."))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .addAction(0, "Open", openApp(context, chatKey))
+        post(context, chatKey, b)
+    }
+
     /** Auto mode: countdown before sending, with Cancel. */
     fun autoPending(context: Context, chatKey: String, chatName: String, text: String, delaySec: Int) {
         val b = base(context, CH_AUTO, chatKey)

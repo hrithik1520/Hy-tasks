@@ -1,6 +1,7 @@
 package com.hy.assistant
 
 import android.app.Application
+import android.os.PowerManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hy.assistant.core.Agent
@@ -72,6 +73,9 @@ data class ReplyProposal(
 
 data class Disambiguation(val query: String, val candidates: List<Chat>, val onPick: (Chat) -> Unit)
 
+/** A change that needs an explicit tap, e.g. turning on unattended replies. */
+data class Confirmation(val title: String, val text: String, val confirmLabel: String, val onConfirm: () -> Unit)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as HyApp
     val settings = app.settings
@@ -80,6 +84,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val chats: StateFlow<List<Chat>> = MessageStore.state
     val feed: StateFlow<List<FeedItem>> = NotificationFeed.state
     val activity: StateFlow<List<ActivityLog.Entry>> = ActivityLog.entries
+
+    private val _confirm = MutableStateFlow<Confirmation?>(null)
+    val confirm: StateFlow<Confirmation?> = _confirm.asStateFlow()
+
+    private fun isIgnoringBattery(): Boolean =
+        app.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(app.packageName)
+
+    /** True once the user exempted Hy from battery optimization (needed to react while the phone sleeps). */
+    private val _ignoringBattery = MutableStateFlow(isIgnoringBattery())
+    val ignoringBattery: StateFlow<Boolean> = _ignoringBattery.asStateFlow()
+
+    fun confirmPending() {
+        val c = _confirm.value
+        _confirm.value = null
+        c?.onConfirm?.invoke()
+    }
+
+    fun dismissConfirm() {
+        _confirm.value = null
+        finishTurn("Okay, I left it as it is.")
+    }
+
+    private fun askConfirm(title: String, text: String, confirmLabel: String, onConfirm: () -> Unit) {
+        _output.value = null
+        _confirm.value = Confirmation(title, text, confirmLabel, onConfirm)
+    }
 
     private val _canNotify = MutableStateFlow(HyNotifications.canPost(app))
     val canNotify: StateFlow<Boolean> = _canNotify.asStateFlow()
@@ -421,6 +451,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshStatus() {
         _listenerEnabled.value = WhatsAppListenerService.isEnabled(app)
         _canNotify.value = HyNotifications.canPost(app)
+        _ignoringBattery.value = isIgnoringBattery()
         models.refresh()
     }
 
@@ -518,15 +549,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             is AgentAction.SetMode -> {
                 _output.value = null
-                setReplyMode(if (action.auto) ReplyMode.AUTO else ReplyMode.MANUAL)
-                finishTurn(if (action.auto) "Switched to Auto mode." else "Switched to Manual mode.")
+                if (action.auto) {
+                    // Free text is read by a small model that can misjudge it: never let it silently
+                    // switch on replies that go out without the user looking.
+                    askConfirm(
+                        "Turn on Auto replies?",
+                        "Hy will answer new messages by itself (after a short countdown you can cancel). " +
+                            "Questions get a fixed \"I'll get back to you\"; OTPs, money, passwords and emergencies are always held for you.",
+                        "Turn on",
+                    ) {
+                        setReplyMode(ReplyMode.AUTO)
+                        finishTurn("Switched to Auto mode.")
+                    }
+                } else {
+                    setReplyMode(ReplyMode.MANUAL)
+                    finishTurn("Switched to Manual mode.")
+                }
             }
             is AgentAction.SetChatMode -> withChat(action.contact, notFound(action.contact)) { chat ->
                 val mode = ChatMode.valueOf(action.mode.uppercase())
-                setChatMode(chat.key, mode)
+                val applyMode: () -> Unit = {
+                    setChatMode(chat.key, mode)
+                    _messages.tryEmit("${chat.name}: ${mode.label}")
+                    finishTurn("Set ${chat.name} to ${mode.label}.")
+                }
                 _output.value = null
-                _messages.tryEmit("${chat.name}: ${mode.label}")
-                finishTurn("Set ${chat.name} to ${mode.label}.")
+                if (mode == ChatMode.AUTO) {
+                    askConfirm("Auto-reply in ${Prompts.safeName(chat.name)}?", "Hy will reply to new messages in this chat by itself.", "Turn on", applyMode)
+                } else {
+                    applyMode()
+                }
             }
         }
     }

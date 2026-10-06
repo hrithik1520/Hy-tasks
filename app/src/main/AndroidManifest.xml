@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Keeps the CPU awake for the few seconds it takes to draft a reply with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Lets the user exempt Hy from battery optimization so it can react while the phone sleeps. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Run terminal commands inside Termux (user grants it; Termux must allow external apps). -->
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 

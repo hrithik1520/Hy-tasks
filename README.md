@@ -60,10 +60,14 @@ What it does:
   - **Manual**: every new message gets a drafted reply in a notification. Tap **Send**
     right from the notification shade, or **Reply** to type your own.
   - **Auto**: Hy sends the reply by itself after a short countdown (default 10 s, with
-    **Cancel**). Safety rules always hold back OTPs/codes, money, passwords and
-    emergencies, plus group chats unless you allow them. Those come to you as
-    suggestions instead. Max one auto-reply per chat every 5 min. Everything Hy does
-    is listed under **Hy activity**.
+    **Cancel**). Questions and requests aimed at you get a fixed "busy, will reply soon";
+    the AI only writes light replies (thanks, wishes, greetings), and its text is checked
+    (no numbers, links, money talk or promises) or replaced by the holding message.
+    Money, emergencies, location requests and group chats are held for you as
+    suggestions, OTPs/passwords get no reply, and a message suggesting someone may be in
+    distress gets no drafted reply at all, only an alert. Turning Auto on by typing a
+    request asks you to confirm first. Max one auto-reply per chat every 5 min. Everything
+    Hy does is listed under **Hy activity**.
 - **Watches everything automatically**: chats from any messenger, plus a feed of other
   notifications (codes, deliveries, payments, reminders…) that's included in
   "What did I miss?".
@@ -105,10 +109,14 @@ button**. This means:
   granted. Muted chats and old history aren't visible.
 - Direct **Send** works while that chat's WhatsApp notification is still showing. If you
   already opened the chat in WhatsApp, Hy offers **Copy & open WhatsApp** instead.
-- Messages are stored only on the phone, for 3 days.
+- Messages are stored only on the phone, for 3 days. One-time codes in other apps'
+  notifications are masked (••••) before they are stored.
+- Allow **"Let Hy work while the phone sleeps"** on the home screen (battery optimization),
+  otherwise Android may pause Hy with the screen off and replies come late.
 
 The AI is [llama.cpp](https://github.com/ggml-org/llama.cpp) compiled into the app (CPU,
-tuned for the Dimensity 7300's Cortex-A78 cores) running a quantized GGUF model.
+built for the Armv8.2 baseline with dot-product instructions that every recent phone has) running a
+quantized GGUF model.
 Commands are understood by plain rules, and contacts are matched by fuzzy name matching.
 The model only writes text. It never picks recipients or triggers actions.
 

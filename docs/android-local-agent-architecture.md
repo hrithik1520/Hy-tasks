@@ -271,7 +271,7 @@ service — the OS will kill it and it drains battery.
 | Messengers | **WhatsApp** (+ WhatsApp Business toggle) | Only notification-based read + `RemoteInput` reply; no history access |
 | Languages | **English** | Qwen2.5 Instruct models; English-only prompts |
 | Distribution | **Both** sideload and Play Store | v1 ships as a sideload APK via GitHub Releases. Play needs a private signing key and a notification-listener policy declaration first |
-| Target device | **Nothing Phone (3a) Pro** (Dimensity 7300, 8/12 GB RAM, Android 15) | arm64-only build, `-march=armv8.2-a+dotprod+fp16`, 4 threads (A78 cores), 1.5B Q4_K_M default |
+| Target device | **Nothing Phone (3a) Pro** (Snapdragon 7s Gen 3: 4× Cortex-A720 + 4× A520, 8/12 GB RAM, Android 15) | arm64-only build, safe baseline `-march=armv8.2-a+dotprod+fp16` (i8mm / runtime CPU variants are a pending optimisation), 4 threads, 1.5B Q4_K_M default |
 | Voice | **Not in v1** | No STT/TTS; F5 deferred |
 
 ## 12. What v1 actually implements

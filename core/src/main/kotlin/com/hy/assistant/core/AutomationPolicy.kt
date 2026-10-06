@@ -10,6 +10,8 @@ sealed interface AutoDecision {
     data object Auto : AutoDecision
     /** Auto mode wanted, but a safety rule says the user must decide: suggest, labelled with why. */
     data class Hold(val reason: String) : AutoDecision
+    /** Sensitive (e.g. someone may be in distress): no draft, no Send, only an alert for the user. */
+    data class NeedsYou(val reason: String) : AutoDecision
 }
 
 /** Pure rules behind Manual/Auto mode, kept here so they can be unit-tested. */
@@ -36,9 +38,12 @@ object AutomationPolicy {
     private val automatedSender = Regex("""^[A-Z]{2}-[A-Z0-9]{3,}(-[A-Z])?$|^\+?\d{3,6}$|no-?reply|notification""", RegexOption.IGNORE_CASE)
 
     fun decide(i: Input): AutoDecision {
-        if (i.chatSetting == ChatSetting.OFF || !i.canReply || i.incoming.isEmpty()) return AutoDecision.None
+        if (i.chatSetting == ChatSetting.OFF || i.incoming.isEmpty()) return AutoDecision.None
+        val block = SafetyFilter.worstReason(i.incoming)
+        // Someone who may be in distress: a bot-written reply is never appropriate, in any mode.
+        if (block?.neverDraft == true) return AutoDecision.NeedsYou(block.label)
+        if (!i.canReply) return AutoDecision.None
         if (automatedSender.containsMatchIn(i.chatName.trim())) return AutoDecision.None
-        val block = i.incoming.firstNotNullOfOrNull { SafetyFilter.blockReason(it) }
         // Nothing sensible to reply to a code or a password request: stay quiet.
         if (block == SafetyFilter.Reason.OTP || block == SafetyFilter.Reason.CREDENTIALS) return AutoDecision.None
         // The model only understands English: don't guess a reply to "Savu ninna".

@@ -315,7 +315,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     }
                 }
                 Text(
-                    "4 is best on Nothing Phone (3a) Pro (uses the fast cores).",
+                    "4 matches the Nothing Phone (3a) Pro's four performance cores. Threads aren't pinned to them, so results can vary.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

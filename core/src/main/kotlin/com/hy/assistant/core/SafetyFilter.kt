@@ -2,34 +2,62 @@ package com.hy.assistant.core
 
 /**
  * Decides whether an incoming message is safe to answer automatically. Anything touching
- * codes, money, credentials or emergencies always goes to the user instead.
+ * distress, emergencies, codes, credentials, money or personal details always goes to the
+ * user instead. Deliberately over-cautious: a false "hold" costs one tap, a miss can cost more.
  */
 object SafetyFilter {
-    enum class Reason(val label: String) {
-        OTP("one-time code"),
-        MONEY("money / payment"),
-        CREDENTIALS("password or PIN"),
+    /** Declared in priority order: when several apply, the earliest is reported. */
+    enum class Reason(val label: String, val neverDraft: Boolean = false) {
+        /** Self-harm talk: no bot-written reply is appropriate, in any mode. */
+        DISTRESS("someone may be in distress", neverDraft = true),
         EMERGENCY("urgent / emergency"),
+        OTP("one-time code"),
+        CREDENTIALS("password, PIN or ID number"),
+        MONEY("money / payment"),
+        PRIVACY("location / personal details"),
     }
 
-    private val otp = Regex("""\b(otp|one[- ]time|verification code|security code|login code|code is|passcode)\b|\b\d{4,8}\b.*\b(code|otp)\b|\b(code|otp)\b.*\b\d{4,8}\b""")
-    private val money = Regex(
-        """(₹|\$|€|£|\brs\.?\s?\d|\binr\b|\bupi\b|\bpayment\b|\bpay me\b|\bpay\b.*\b(back|now|today)\b|\bsend (me )?money\b|\btransfer\b|\bbank\b|\baccount number\b|\bifsc\b|\bloan\b|\blend me\b|\bborrow\b|\bgpay\b|\bpaytm\b|\bphonepe\b)""",
+    private val distress = Regex(
+        """\b(kill(ing)? myself|suicid\w*|end(ing)? (my life|it all)|want(ed)? to die|wanna die|(hurt|harm|cut)(ting)? myself|self[- ]?harm|don't want to (live|be alive|be here)|no reason to live|can't go on|better off (dead|without me)|take my (own )?life)\b""",
     )
-    private val credentials = Regex("""\b(password|passcode|\bpin\b|cvv|card number|login details|credentials)\b""")
-    private val emergency = Regex("""\b(urgent|emergency|hospital|accident|ambulance|police|help me|call me asap|asap)\b""")
+    private val emergency = Regex(
+        """\b(urgent(ly)?|emergenc(y|ies)|asap|help me|please help|need help|in trouble|in danger|not safe|unsafe|scared|accident|hospital|icu|ambulance|police|bleeding|injured|fire|kidnap\w*|robbed|attacked)\b""",
+    )
+    private val otp = Regex(
+        """\b(otp|one[- ]time|verification code|security code|login code|auth(entication)? code|2fa|code is|passcode)\b|\b(send|share|tell|give|forward|read out) (me )?(the |that |your |ur )?(codes?|otp)\b|\b\d{4,8}\b.*\b(code|otp)\b|\b(code|otp)\b.*\b\d{4,8}\b""",
+    )
+    private val credentials = Regex(
+        """\b(password|passwd|pwd|passcode|pin|cvv|cvc|card number|card details|login details|credentials|aadhaar|aadhar|pan card|pan number|ssn|social security|passport number|seed phrase|private key|secret key|api key|account number|ifsc|upi id)\b""",
+    )
+    private val money = Regex(
+        """[₹$€£]|\b(rs|inr|usd|eur|rupees?|dollars?|bucks|euros?)\b|\b\d[\d,.]*\s?(k|rs|inr|usd|rupees?|dollars?|bucks)\b|\b(upi|gpay|google pay|paytm|phonepe|bhim|venmo|zelle|cash ?app|paypal|neft|imps|rtgs|net ?banking)\b|\b(pay|pays|paid|paying|payment|payments|transfer|transferred|refund|loan|lend|borrow|owe|owed|debt|emi|rent|salary|invoice|cash|money|deposit|bank)\b""",
+    )
+    private val privacy = Regex(
+        """\b(send|share|tell|give|drop|show) (me )?(your|ur|the) (live )?(location|address|number|phone number|email|photos?|pics?|selfie)\b|\bshare (your )?(live )?location\b|\bwhere (do you|u) live\b|\b(your|ur) (home |house )?address\b""",
+    )
+
+    private val rules: List<Pair<Reason, Regex>> = listOf(
+        Reason.DISTRESS to distress,
+        Reason.EMERGENCY to emergency,
+        Reason.OTP to otp,
+        Reason.CREDENTIALS to credentials,
+        Reason.MONEY to money,
+        Reason.PRIVACY to privacy,
+    )
+
+    /** Lowercases and straightens curly apostrophes ("can\u2019t" -> "can't"). */
+    internal fun normalize(text: String): String =
+        text.lowercase().replace('\u2019', '\'').replace('\u2018', '\'').replace('`', '\'')
 
     /** Returns why the message must not be auto-answered, or null if it's fine. */
     fun blockReason(text: String): Reason? {
-        val t = text.lowercase()
-        return when {
-            otp.containsMatchIn(t) -> Reason.OTP
-            credentials.containsMatchIn(t) -> Reason.CREDENTIALS
-            money.containsMatchIn(t) -> Reason.MONEY
-            emergency.containsMatchIn(t) -> Reason.EMERGENCY
-            else -> null
-        }
+        val t = normalize(text)
+        return rules.firstOrNull { (_, re) -> re.containsMatchIn(t) }?.first
     }
+
+    /** The highest-priority reason across several messages, or null. */
+    fun worstReason(texts: List<String>): Reason? =
+        texts.mapNotNull { blockReason(it) }.minByOrNull { it.ordinal }
 }
 
 /** Rule-based category for non-chat notifications (no LLM needed). */

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.hy.assistant.core.NotificationClassifier
 import com.hy.assistant.core.NotificationClassifier.Category
+import com.hy.assistant.core.Redactor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -50,11 +51,18 @@ object NotificationFeed {
         file = File(context.filesDir, "feed.json")
         synchronized(lock) { load() }
         publish()
+        scheduleSave() // rewrites the file so migrated (masked) entries replace old ones
     }
 
     fun add(id: String, packageName: String, appName: String, title: String, text: String, timestamp: Long) {
         if (title.isBlank() && text.isBlank()) return
-        val item = FeedItem(id, packageName, appName, title, text, timestamp, NotificationClassifier.classify(packageName, title, text))
+        // Classify on the raw text (the digits are what identify a code), then store it masked.
+        val category = NotificationClassifier.classify(packageName, title, text)
+        val item = if (category == Category.OTP) {
+            FeedItem(id, packageName, appName, Redactor.maskCodes(title), Redactor.maskCodes(text), timestamp, category)
+        } else {
+            FeedItem(id, packageName, appName, title, text, timestamp, category)
+        }
         synchronized(lock) {
             items.remove(id) // re-insert so updated notifications move to the end
             items[id] = item
@@ -100,7 +108,7 @@ object NotificationFeed {
             items.values.forEach {
                 arr.put(
                     JSONObject().put("id", it.id).put("pkg", it.packageName).put("app", it.appName)
-                        .put("title", it.title).put("text", it.text).put("ts", it.timestamp),
+                        .put("title", it.title).put("text", it.text).put("ts", it.timestamp).put("cat", it.category.name),
                 )
             }
             val tmp = File(file.parentFile, file.name + ".tmp")
@@ -120,11 +128,17 @@ object NotificationFeed {
             for (i in 0 until arr.length()) {
                 val j = arr.getJSONObject(i)
                 val pkg = j.getString("pkg")
-                val title = j.getString("title")
-                val text = j.getString("text")
+                val rawTitle = j.getString("title")
+                val rawText = j.getString("text")
+                val category = runCatching { Category.valueOf(j.getString("cat")) }
+                    .getOrElse { NotificationClassifier.classify(pkg, rawTitle, rawText) }
+                // Entries saved by older versions may still hold a code in clear text: mask on load.
+                val masked = category == Category.OTP
                 items[j.getString("id")] = FeedItem(
-                    j.getString("id"), pkg, j.getString("app"), title, text, j.getLong("ts"),
-                    NotificationClassifier.classify(pkg, title, text),
+                    j.getString("id"), pkg, j.getString("app"),
+                    if (masked) Redactor.maskCodes(rawTitle) else rawTitle,
+                    if (masked) Redactor.maskCodes(rawText) else rawText,
+                    j.getLong("ts"), category,
                 )
             }
         } catch (e: Exception) {

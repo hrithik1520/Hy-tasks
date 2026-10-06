@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Reacts to new incoming messages without the user asking:
@@ -43,11 +44,44 @@ class Automation(
     private val lastAutoAt = ConcurrentHashMap<String, Long>()
     private val llm = Mutex()
 
+    // One shared wake lock, counted by hand (a refcounted lock with timeouts can throw on release).
+    // It is held from the first message until the reply is sent or abandoned: a phone asleep in a
+    // pocket would otherwise stall the debounce and countdown timers below.
+    private val wakeLock = context.getSystemService(PowerManager::class.java)
+        .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "hy:pipeline")
+        .apply { setReferenceCounted(false) }
+    private val holders = AtomicInteger(0)
+
+    private fun hold() {
+        holders.incrementAndGet()
+        wakeLock.acquire(HOLD_TIMEOUT_MS) // safety net: never held longer than this
+    }
+
+    private fun release() {
+        if (holders.decrementAndGet() <= 0) {
+            holders.set(0)
+            runCatching { if (wakeLock.isHeld) wakeLock.release() }
+        }
+    }
+
+    /** Launches [block] with the CPU held awake until it finishes, fails, or is cancelled before it even starts. */
+    private fun launchHeld(block: suspend CoroutineScope.() -> Unit): Job {
+        hold()
+        val job = scope.launch(block = block)
+        job.invokeOnCompletion { release() }
+        return job
+    }
+
     fun onIncoming(chatKey: String) {
-        // A new message cancels a pending auto-send for that chat: we'll re-draft with full context.
-        pendingSends.remove(chatKey)?.job?.cancel()
+        // A new message cancels a pending auto-send for that chat (we re-draft with full context),
+        // and its "Auto-replying in 10s" card with it, so a dead Cancel button can't linger.
+        pendingSends.remove(chatKey)?.let {
+            it.job.cancel()
+            HyNotifications.cancel(context, chatKey)
+        }
         debounce.remove(chatKey)?.cancel()
-        debounce[chatKey] = scope.launch {
+        debounce[chatKey] = launchHeld {
+            val self = coroutineContext[Job]
             delay(DEBOUNCE_MS) // wait for bursts ("hey" … "you there?" … "call me")
             try {
                 process(chatKey)
@@ -56,7 +90,8 @@ class Automation(
             } catch (e: Exception) {
                 Log.w(TAG, "automation failed for $chatKey", e)
             } finally {
-                debounce.remove(chatKey)
+                // Only remove our own entry: a newer message may already have replaced it.
+                self?.let { debounce.remove(chatKey, it) }
             }
         }
     }
@@ -84,8 +119,14 @@ class Automation(
                 dailyLimitReached = ActivityLog.autoSentToday() >= DAILY_AUTO_LIMIT,
             ),
         )
+        // Someone who may be in distress: no bot-written reply is appropriate; just tell the user.
+        if (decision is AutoDecision.NeedsYou) {
+            HyNotifications.sensitive(context, chat.key, chat.name, pendingIncoming.last().text, decision.reason)
+            ActivityLog.add(ActivityLog.Kind.HELD, chat.name, "(no reply drafted)", decision.reason)
+            return
+        }
         if (decision == AutoDecision.None) return
-        val model = models.activeModelFile() ?: return
+        val model = models.activeModelFile() // may be null: a fixed holding message / quick reply needs no AI
         val sendAutomatically = decision == AutoDecision.Auto
         val holdReason = (decision as? AutoDecision.Hold)?.reason
 
@@ -103,7 +144,8 @@ class Automation(
         } else if (quick != null) {
             quick
         } else {
-            val raw = withWakeLock { llm.withLock { engine.complete(model, prompt, s.threads, s.contextSize) } }
+            val m = model ?: return
+            val raw = llm.withLock { engine.complete(m, prompt, s.threads, s.contextSize) }
             if (sendAutomatically) AutoReply.replyText(raw) ?: AutoReply.holdingText(holdSeed) else raw
         }
         val text = ReplyStyle.finish(draft, chat, s)
@@ -124,7 +166,7 @@ class Automation(
 
     private fun scheduleAutoSend(chat: Chat, text: String, delaySec: Int) {
         pendingSends.remove(chat.key)?.job?.cancel()
-        val job = scope.launch {
+        val job = launchHeld {
             if (delaySec > 0) {
                 HyNotifications.autoPending(context, chat.key, chat.name, text, delaySec)
                 delay(delaySec * 1000L)
@@ -133,7 +175,7 @@ class Automation(
             val latest = MessageStore.chat(chat.key)
             if (latest == null || latest.messages.lastOrNull()?.fromMe == true) {
                 HyNotifications.cancel(context, chat.key)
-                return@launch
+                return@launchHeld
             }
             sendNow(chat.key, text, auto = true)
         }
@@ -157,10 +199,11 @@ class Automation(
     }
 
     fun cancelAuto(chatKey: String) {
-        val p = pendingSends.remove(chatKey) ?: return
-        p.job.cancel()
+        val p = pendingSends.remove(chatKey)
+        p?.job?.cancel()
+        // Also clears a stale countdown card whose send was already superseded by a newer message.
         HyNotifications.cancel(context, chatKey)
-        ActivityLog.add(ActivityLog.Kind.CANCELLED, p.chatName, p.text)
+        if (p != null) ActivityLog.add(ActivityLog.Kind.CANCELLED, p.chatName, p.text)
     }
 
     fun sendPendingNow(chatKey: String) {
@@ -171,20 +214,10 @@ class Automation(
 
     fun hasPending(chatKey: String) = pendingSends.containsKey(chatKey)
 
-    private suspend fun <T> withWakeLock(block: suspend () -> T): T {
-        val pm = context.getSystemService(PowerManager::class.java)
-        val lock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "hy:draft")
-        lock.acquire(90_000L)
-        try {
-            return block()
-        } finally {
-            if (lock.isHeld) lock.release()
-        }
-    }
-
     companion object {
         private const val TAG = "Automation"
         private const val DEBOUNCE_MS = 6_000L
         private const val DAILY_AUTO_LIMIT = 40
+        private const val HOLD_TIMEOUT_MS = 3 * 60 * 1000L
     }
 }

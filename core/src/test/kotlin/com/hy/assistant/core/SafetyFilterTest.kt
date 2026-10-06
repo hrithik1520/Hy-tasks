@@ -4,6 +4,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 
 class SafetyFilterTest {
     @Test
@@ -43,5 +45,56 @@ class SafetyFilterTest {
         assertTrue(p.system.contains("do NOT know"))
         assertTrue(p.grammar == AutoReply.GRAMMAR && p.temperature == 0f)
         assertTrue(p.user.contains("can you come tomorrow at 6?"))
+    }
+
+    /** Everything the first version let through (found in the code analysis) plus the original cases. */
+    private val mustHold = listOf(
+        "Your OTP is 482913", "send the otp", "can you send me the code 4821 you got", "what's your atm pin",
+        "can you gimme 500 rupees", "send me 500 rs", "I need 2k urgently", "can you pay for my lunch",
+        "need 5000 for rent", "lend me some cash", "venmo me the 20", "bro send me ₹500 on gpay",
+        "Can you transfer the rent today?", "pay me back tomorrow", "what's the wifi password",
+        "share your aadhaar number", "what's your SSN", "send me your location",
+        "I want to kill myself", "I'm going to hurt myself", "please help, I'm in trouble", "URGENT call me",
+        "I'm at the hospital",
+    )
+
+    @Test
+    fun holdsEverythingSensitive() {
+        for (s in mustHold) assertNotNull(SafetyFilter.blockReason(s), s)
+    }
+
+    @Test
+    fun reportsTheRightReasonAndPriority() {
+        assertEquals(SafetyFilter.Reason.DISTRESS, SafetyFilter.blockReason("I want to kill myself"))
+        assertEquals(SafetyFilter.Reason.EMERGENCY, SafetyFilter.blockReason("I need 2k urgently")) // beats MONEY
+        assertEquals(SafetyFilter.Reason.CREDENTIALS, SafetyFilter.blockReason("share your aadhaar number"))
+        assertEquals(SafetyFilter.Reason.MONEY, SafetyFilter.blockReason("venmo me the 20"))
+        assertEquals(SafetyFilter.Reason.PRIVACY, SafetyFilter.blockReason("send me your location"))
+        assertEquals(
+            SafetyFilter.Reason.DISTRESS,
+            SafetyFilter.worstReason(listOf("pay me back", "I can't go on", "hi")),
+        )
+        assertNull(SafetyFilter.worstReason(listOf("hi", "good morning")))
+    }
+
+    @Test
+    fun onlyDistressSkipsDrafting() {
+        assertTrue(SafetyFilter.Reason.DISTRESS.neverDraft)
+        assertFalse(SafetyFilter.Reason.MONEY.neverDraft)
+        assertFalse(SafetyFilter.Reason.EMERGENCY.neverDraft)
+    }
+
+    @Test
+    fun handlesCurlyApostrophesFromPhoneKeyboards() {
+        assertEquals(SafetyFilter.Reason.DISTRESS, SafetyFilter.blockReason("I can\u2019t go on"))
+        assertEquals(SafetyFilter.Reason.DISTRESS, SafetyFilter.blockReason("I don\u2019t want to live"))
+    }
+
+    @Test
+    fun leavesEverydayChatAndHarmlessFactsAlone() {
+        for (s in listOf(
+            "good morning", "thanks bro", "see you soon", "that movie was great", "my passport is in the drawer",
+            "my boss is Priya", "I like pizza", "the ATM near my house",
+        )) assertNull(SafetyFilter.blockReason(s), s)
     }
 }

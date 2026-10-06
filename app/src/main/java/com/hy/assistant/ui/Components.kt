@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hy.assistant.AssistantOutput
+import com.hy.assistant.Confirmation
 import com.hy.assistant.core.ExportFormat
 import com.hy.assistant.tools.SavedFile
 import androidx.compose.foundation.horizontalScroll
@@ -138,6 +139,21 @@ fun ProposalCard(
             } else {
                 Button(onClick = onCopyOpen, enabled = !p.generating && p.text.isNotBlank()) { Text("Copy & open WhatsApp") }
             }
+        }
+    }
+}
+
+/** Asks for an explicit tap before a risky change (e.g. turning on unattended replies). */
+@Composable
+fun ConfirmCard(c: Confirmation, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    SectionCard {
+        Text(c.title, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.padding(4.dp))
+        Text(c.text, style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = onConfirm) { Text(c.confirmLabel) }
         }
     }
 }

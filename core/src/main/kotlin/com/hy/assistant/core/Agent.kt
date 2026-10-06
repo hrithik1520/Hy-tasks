@@ -49,7 +49,7 @@ object Agent {
 
     /** [history]: recent conversation, so follow-ups like "reply to him" or "and tomorrow?" resolve. */
     fun routePrompt(request: String, chatNames: List<String>, history: String = ""): Prompt {
-        val names = chatNames.take(25).joinToString(", ").ifBlank { "(none yet)" }
+        val names = chatNames.take(25).joinToString(", ") { Prompts.safeName(it, 30) }.ifBlank { "(none yet)" }
         val recent = if (history.isBlank()) "" else "\nRecent conversation (use it to resolve words like him, her, that, it):\n$history\n"
         return Prompt(
             system = """
