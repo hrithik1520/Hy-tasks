@@ -61,7 +61,23 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // The wake-word service may only be started while Hy is on screen.
+        val s = vm.settings.current
+        if (s.wakeWordEnabled && com.hy.assistant.voice.WakeModel.isReady(this) && !com.hy.assistant.voice.WakeWordService.running.value) {
+            com.hy.assistant.voice.WakeWordService.start(this)
+        }
+    }
+
     private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_VOICE, false) == true) {
+            // "Hey Alfred": show over the lock screen and start talking.
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            intent.removeExtra(EXTRA_VOICE)
+            vm.requestVoice()
+        }
         intent?.getStringExtra(EXTRA_OPEN_CHAT)?.let { vm.requestOpenChat(it) }
         intent?.getStringExtra(EXTRA_SCREEN_LABEL)?.let { label ->
             vm.onScreen(intent.getStringExtra(EXTRA_SCREEN_TEXT).orEmpty(), label, intent.getStringExtra(EXTRA_SCREEN_ERROR))
@@ -77,6 +93,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_CHAT = "open_chat"
+        const val EXTRA_VOICE = "voice"
         const val EXTRA_SCREEN_TEXT = "screen_text"
         const val EXTRA_SCREEN_LABEL = "screen_label"
         const val EXTRA_SCREEN_ERROR = "screen_error"

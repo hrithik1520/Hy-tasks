@@ -13,6 +13,10 @@
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <!-- Phone actions: find a contact's number (asked on first use) and set alarms/timers. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Voice: talking to Hy, and the optional offline "Hey Alfred" wake word. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
     <queries>
@@ -20,6 +24,12 @@
         <package android:name="com.whatsapp.w4b" />
         <package android:name="com.termux" />
         <package android:name="com.google.android.youtube" />
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
         <!-- "open <app>": list launchable apps. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -107,6 +117,11 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/screen_service" />
         </service>
+
+        <service
+            android:name=".voice.WakeWordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- Quick Settings tile: Manual / Auto reply mode. -->
         <service

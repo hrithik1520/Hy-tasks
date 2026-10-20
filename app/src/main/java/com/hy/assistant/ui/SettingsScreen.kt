@@ -25,6 +25,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -58,6 +59,19 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumeTick++ }
     val screenOn = remember(resumeTick) { com.hy.assistant.screen.HyScreenService.isEnabled(context) }
     var showDisclosure by remember { mutableStateOf(false) }
+    val wakeModel by com.hy.assistant.voice.WakeModel.state.collectAsState()
+    val wakeRunning by com.hy.assistant.voice.WakeWordService.running.collectAsState()
+    var micGranted by remember(resumeTick) {
+        mutableStateOf(androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+    }
+    val micPermission = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+        micGranted = ok
+        if (ok) {
+            vm.settings.update { it.copy(wakeWordEnabled = true) }
+            com.hy.assistant.voice.WakeWordService.start(context)
+        }
+    }
+    LaunchedEffect(resumeTick) { com.hy.assistant.voice.WakeModel.refresh(context) }
     if (showDisclosure) {
         AlertDialog(
             onDismissRequest = { showDisclosure = false },
@@ -245,6 +259,43 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+
+            SectionCard {
+                Text("Voice", style = MaterialTheme.typography.titleSmall)
+                ToggleRow("Speak answers", "Read answers aloud when you talk to Hy (🎤 on the home screen).", s.speakAnswers) { v ->
+                    vm.settings.update { it.copy(speakAnswers = v) }
+                }
+                ToggleRow(
+                    "Wake word: \"Hey Alfred\"",
+                    "Also \"What's up Alfred\" or just \"Alfred\". Listens offline on this phone with a small notification; pauses during calls. " +
+                        "Uses some battery. First time downloads a 40 MB voice model.",
+                    s.wakeWordEnabled,
+                ) { v ->
+                    if (v && !micGranted) {
+                        micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+                    } else {
+                        vm.settings.update { it.copy(wakeWordEnabled = v) }
+                        if (v) com.hy.assistant.voice.WakeWordService.start(context) else com.hy.assistant.voice.WakeWordService.stop(context)
+                    }
+                }
+                when (val m = wakeModel) {
+                    is com.hy.assistant.voice.WakeModel.State.Downloading ->
+                        Text("Downloading voice model… ${m.mb} MB" + (m.totalMb?.let { " of $it MB" } ?: ""), style = MaterialTheme.typography.bodySmall)
+                    is com.hy.assistant.voice.WakeModel.State.Failed -> Text(m.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    else -> if (s.wakeWordEnabled) Text(
+                        if (wakeRunning) "Listening for \"Hey Alfred\"." else "Starting…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (s.wakeWordEnabled && !screenOn) {
+                    Text(
+                        "Tip: with Screen reading on, \"Hey Alfred\" opens Hy directly. Without it you get a notification to tap.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             SectionCard {

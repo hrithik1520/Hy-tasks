@@ -97,4 +97,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    // Offline "Hey Alfred" wake word (Vosk + its JNA bridge; native libs are 16 KB-aligned).
+    implementation("com.alphacephei:vosk-android:0.3.75")
+    implementation("net.java.dev.jna:jna:5.19.1@aar")
 }

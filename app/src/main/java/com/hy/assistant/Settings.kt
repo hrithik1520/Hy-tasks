@@ -53,6 +53,10 @@ data class SettingsData(
     val readWhatsAppScreen: Boolean = false,
     /** Emojis in drafted replies: add one when it fits (default), match the chat, or none. */
     val emojiMode: Humanizer.EmojiMode = Humanizer.EmojiMode.FITS,
+    /** Read answers aloud when a request was spoken. */
+    val speakAnswers: Boolean = true,
+    /** Offline "Hey Alfred" listener (foreground service with a notification). */
+    val wakeWordEnabled: Boolean = false,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -99,6 +103,8 @@ class Settings(context: Context) {
             briefingEnabled = prefs.getBoolean("briefingEnabled", d.briefingEnabled),
             briefingHour = prefs.getInt("briefingHour", d.briefingHour),
             readWhatsAppScreen = prefs.getBoolean("readWhatsAppScreen", d.readWhatsAppScreen),
+            speakAnswers = prefs.getBoolean("speakAnswers", d.speakAnswers),
+            wakeWordEnabled = prefs.getBoolean("wakeWordEnabled", d.wakeWordEnabled),
             emojiMode = runCatching { Humanizer.EmojiMode.valueOf(prefs.getString("emojiMode", d.emojiMode.name)!!) }.getOrDefault(d.emojiMode),
             searchEngine = runCatching { SearchEngine.valueOf(prefs.getString("searchEngine", d.searchEngine.name)!!) }.getOrDefault(d.searchEngine),
         )
@@ -132,6 +138,8 @@ class Settings(context: Context) {
             .putInt("briefingHour", d.briefingHour)
             .putBoolean("readWhatsAppScreen", d.readWhatsAppScreen)
             .putString("emojiMode", d.emojiMode.name)
+            .putBoolean("speakAnswers", d.speakAnswers)
+            .putBoolean("wakeWordEnabled", d.wakeWordEnabled)
             .apply()
         _data.value = d
     }

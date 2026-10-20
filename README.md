@@ -100,6 +100,12 @@ Updates: install the newer `HyAssistant.apk` over the old one. Your data and mod
   I'm late" or "reply to Priya on WhatsApp". Hy opens the chat, reads it, drafts a reply (or polishes
   yours), types it into WhatsApp's message box, then shows **Send / Cancel** on a small panel. Nothing
   is sent until you tap Send. "Reply to X" also uses this when X isn't in Hy's notification chats.
+- **Voice**: tap 🎤 to talk to Hy. It answers out loud and keeps listening for follow-ups
+  ("and tomorrow?", "send that to Priya") until you say "stop" or go quiet. Drafted replies are
+  read out: say **"send"**, **"cancel"** or **"change it to …"**.
+- **"Hey Alfred"** (optional wake word, also "What's up Alfred" / "Alfred"): listens offline on the
+  phone with a small notification (40 MB voice model, downloaded once). It pauses during calls and
+  opens Hy straight into a conversation, over the lock screen for questions.
 - **Quick Settings tile**: switch Manual/Auto from the notification shade (edit tiles → "Hy auto-reply").
 - **Morning briefing** (optional): a daily notification at your chosen time with unread chats and
   important payments, deliveries and reminders.

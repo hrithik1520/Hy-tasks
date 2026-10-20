@@ -8,6 +8,9 @@ import com.hy.assistant.core.Agent
 import com.hy.assistant.core.AgentAction
 import com.hy.assistant.core.ChatLine
 import com.hy.assistant.core.Command
+import com.hy.assistant.core.SpeakText
+import com.hy.assistant.core.VoiceCommands
+import com.hy.assistant.core.VoiceReply
 import com.hy.assistant.core.Humanizer
 import com.hy.assistant.core.Conversation
 import com.hy.assistant.core.Memory
@@ -112,6 +115,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun askConfirm(title: String, text: String, confirmLabel: String, onConfirm: () -> Unit) {
         _output.value = null
         _confirm.value = Confirmation(title, text, confirmLabel, onConfirm)
+        if (voiceWaiting) {
+            voiceWaiting = false
+            awaiting = Await.CONFIRM
+            say("$title. $text. Say yes or no.")
+        }
     }
 
     private val _canNotify = MutableStateFlow(HyNotifications.canPost(app))
@@ -195,12 +203,176 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     finishTurn(o.error?.let { e -> listOf(o.text, "($e)").filter { it.isNotBlank() }.joinToString("\n") } ?: o.text)
                     _threadedOutput.value = o
                 }
+                if (o != null && !o.running && voiceWaiting) {
+                    voiceWaiting = false
+                    say(listOf(o.text, o.error.orEmpty()).filter { it.isNotBlank() }.joinToString(". ").ifBlank { "Done." })
+                }
             }
         }
         viewModelScope.launch {
             _proposal.collect { p ->
                 if (p != null && !p.generating) finishTurn("Drafted a reply to ${p.chatName}: \"${p.text}\" (shown for you to send)")
+                if (p != null && !p.generating && voiceWaiting) {
+                    voiceWaiting = false
+                    awaiting = Await.PROPOSAL
+                    say("Reply to ${p.chatName}: ${p.text}. Should I send it?")
+                }
             }
+        }
+    }
+
+    // ---- Voice: mic, spoken answers, conversation, spoken confirmations ----------------------
+
+    sealed interface VoiceState {
+        data object Idle : VoiceState
+        data class Listening(val partial: String) : VoiceState
+        data object Thinking : VoiceState
+        data class Speaking(val text: String) : VoiceState
+    }
+
+    private val _voice = MutableStateFlow<VoiceState>(VoiceState.Idle)
+    val voice: StateFlow<VoiceState> = _voice.asStateFlow()
+
+    /** Asked to start talking (mic button / "Hey Alfred") but the mic permission is pending. */
+    private val _voiceRequest = MutableStateFlow(false)
+    val voiceRequest: StateFlow<Boolean> = _voiceRequest.asStateFlow()
+
+    private val speaker by lazy { com.hy.assistant.voice.Speaker(app) }
+    private val listener by lazy { com.hy.assistant.voice.Listener(app) }
+    private var conversation = false
+    /** A spoken request is running: its answer (or draft / confirmation) should be spoken. */
+    private var voiceWaiting = false
+    private enum class Await { NONE, PROPOSAL, CONFIRM }
+    private var awaiting = Await.NONE
+    private var voiceJob: Job? = null
+    private var speakerCreated = false
+
+    init {
+        // Results that only show a short message (e.g. "Auto mode on") are spoken too.
+        viewModelScope.launch {
+            messages.collect { m -> if (voiceWaiting) { voiceWaiting = false; say(m) } }
+        }
+        // "Which Rahul?" asked out loud; the next thing heard picks one.
+        viewModelScope.launch {
+            disambiguation.collect { d ->
+                if (d != null && voiceWaiting) {
+                    voiceWaiting = false
+                    say("Which one: ${d.candidates.joinToString(", or ") { it.name }}?")
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        if (speakerCreated) speaker.shutdown()
+        listener.cancel()
+        super.onCleared()
+    }
+
+    fun hasMicPermission() = listener.hasPermission()
+
+    fun requestVoice() {
+        _voiceRequest.value = true
+    }
+
+    /** Starts a voice conversation (after the mic permission is granted). */
+    fun startVoice(granted: Boolean = true) {
+        _voiceRequest.value = false
+        if (!granted) {
+            _messages.tryEmit("Hy needs the microphone to hear you.")
+            return
+        }
+        if (!listener.isAvailable()) {
+            _messages.tryEmit("No speech recognizer on this phone. Install or enable Google speech services.")
+            return
+        }
+        conversation = true
+        com.hy.assistant.voice.WakeWordService.pauseIfRunning()
+        listenTurn()
+    }
+
+    fun stopVoice() {
+        voiceJob?.cancel()
+        listener.cancel()
+        if (speakerCreated) speaker.stop()
+        endVoice()
+    }
+
+    private fun endVoice() {
+        conversation = false
+        voiceWaiting = false
+        awaiting = Await.NONE
+        _voice.value = VoiceState.Idle
+        com.hy.assistant.voice.WakeWordService.resumeIfRunning()
+    }
+
+    private fun listenTurn() {
+        voiceJob?.cancel()
+        voiceJob = viewModelScope.launch {
+            _voice.value = VoiceState.Listening("")
+            val heard = listener.listen { _voice.value = VoiceState.Listening(it) }
+            if (heard == null) {
+                // Silence ends the conversation; a pending draft stays on screen for a tap.
+                endVoice()
+                return@launch
+            }
+            onHeard(heard)
+        }
+    }
+
+    private fun onHeard(text: String) {
+        when (val r = VoiceCommands.interpret(text, awaiting != Await.NONE)) {
+            VoiceReply.Confirm -> {
+                val a = awaiting
+                awaiting = Await.NONE
+                if (a == Await.PROPOSAL) confirmSend() else confirmPending()
+                say(if (a == Await.PROPOSAL) "Sent." else "Done.")
+            }
+            VoiceReply.Cancel -> {
+                val a = awaiting
+                awaiting = Await.NONE
+                if (a == Await.PROPOSAL) dismissProposal() else dismissConfirm()
+                say("Okay, cancelled.")
+            }
+            is VoiceReply.Edit -> {
+                editProposal(r.newText)
+                say("Changed it to: ${r.newText}. Send it?")
+            }
+            VoiceReply.EndConversation -> say("Okay.", thenListen = false)
+            is VoiceReply.Request -> {
+                // "Which Rahul?" answered by voice.
+                _disambiguation.value?.let { d ->
+                    val pick = ContactMatcher.resolve(r.text, d.candidates.map { it.name })
+                    if (pick is ContactMatcher.Result.Unique) {
+                        chooseCandidate(d.candidates.first { it.name == pick.name })
+                        voiceWaiting = true
+                        _voice.value = VoiceState.Thinking
+                        return
+                    }
+                }
+                voiceWaiting = true
+                _voice.value = VoiceState.Thinking
+                runCommand(r.text)
+                // Some commands only show a short message; don't stay "thinking" forever.
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(120_000)
+                    if (voiceWaiting && _voice.value == VoiceState.Thinking) say("Sorry, that took too long.")
+                }
+            }
+        }
+    }
+
+    /** Speaks [text] (if enabled), then keeps the conversation going when appropriate. */
+    private fun say(text: String, thenListen: Boolean = true) {
+        voiceJob?.cancel()
+        voiceJob = viewModelScope.launch {
+            val spoken = SpeakText.forSpeech(text)
+            _voice.value = VoiceState.Speaking(spoken)
+            if (settings.current.speakAnswers) {
+                speakerCreated = true
+                speaker.speak(spoken)
+            }
+            if (thenListen && (conversation || awaiting != Await.NONE)) listenTurn() else endVoice()
         }
     }
 

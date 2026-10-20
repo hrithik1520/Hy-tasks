@@ -3,3 +3,7 @@
 -keep class com.hy.assistant.llm.LlamaNative { native <methods>; }
 -keep interface com.hy.assistant.llm.TokenCallback { *; }
 -keepclassmembers class * implements com.hy.assistant.llm.TokenCallback { public boolean onBytes(byte[]); }
+
+# Vosk talks to libvosk through JNA, which finds classes and methods by reflection.
+-keep class com.sun.jna.** { *; }
+-keep class org.vosk.** { *; }

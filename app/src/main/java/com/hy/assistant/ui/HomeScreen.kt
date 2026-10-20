@@ -101,6 +101,14 @@ fun HomeScreen(
     val agentMode by vm.agentMode.collectAsState()
     val savedFile by vm.savedFile.collectAsState()
     val shared by vm.shared.collectAsState()
+    val voice by vm.voice.collectAsState()
+    val voiceRequest by vm.voiceRequest.collectAsState()
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.startVoice(it) }
+    LaunchedEffect(voiceRequest) {
+        if (voiceRequest) {
+            if (vm.hasMicPermission()) vm.startVoice(true) else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
     val needContacts by vm.needContacts.collectAsState()
     val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.retryPhone(it) }
     LaunchedEffect(needContacts) { if (needContacts != null) contactsPermission.launch(Manifest.permission.READ_CONTACTS) }
@@ -252,6 +260,7 @@ fun HomeScreen(
                 }
             }
 
+            if (voice != MainViewModel.VoiceState.Idle) item { VoiceBanner(voice, vm::stopVoice) }
             shared?.let { sh -> item { SharedCard(sh, vm::askAboutShared, vm::dismissShared) } }
 
             // ---- Conversation with Hy ---------------------------------------------------
@@ -326,6 +335,8 @@ fun HomeScreen(
                         keyboardActions = KeyboardActions(onSend = { submit() }),
                     )
                     IconButton(onClick = submit) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Run") }
+                    // Talk to Hy: a voice conversation (answers are spoken, follow-ups by voice).
+                    FilledTonalButton(onClick = vm::requestVoice, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("🎤") }
                 }
             }
             item {
@@ -393,6 +404,33 @@ fun HomeScreen(
                 }
             }
             item { Spacer(Modifier.padding(8.dp)) }
+        }
+    }
+}
+
+/** What the voice conversation is doing right now, with Stop. */
+@Composable
+private fun VoiceBanner(state: MainViewModel.VoiceState, onStop: () -> Unit) {
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    when (state) {
+                        is MainViewModel.VoiceState.Listening -> "🎤 Listening…"
+                        MainViewModel.VoiceState.Thinking -> "💭 Thinking…"
+                        is MainViewModel.VoiceState.Speaking -> "🔊 Speaking"
+                        MainViewModel.VoiceState.Idle -> ""
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                val detail = when (state) {
+                    is MainViewModel.VoiceState.Listening -> state.partial.ifBlank { "Say something, or \"stop\"" }
+                    is MainViewModel.VoiceState.Speaking -> state.text
+                    else -> ""
+                }
+                if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodySmall, maxLines = 3, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = onStop) { Text("Stop") }
         }
     }
 }
