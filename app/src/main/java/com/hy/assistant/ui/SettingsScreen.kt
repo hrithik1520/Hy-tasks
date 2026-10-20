@@ -68,7 +68,8 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                         "• only when you tap the accessibility button, or in open WhatsApp chats if you turn that on\n" +
                         "• never password fields\n" +
                         "• everything stays on this phone, nothing is uploaded\n\n" +
-                        "Hy doesn't tap, type or control other apps. On the next screen, open \"Hy · read screen\" and turn it on.",
+                        "When you ask Hy to message someone on WhatsApp, it opens their chat and types a draft. It never presses Send until you tap Send on its panel.\n\n" +
+                        "On the next screen, open \"Hy · read screen\" and turn it on.",
                 )
             },
             confirmButton = {
@@ -261,7 +262,7 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     }) { Text("Copy last screen dump (for fixing the reader)") }
                 }
                 Text(
-                    "Never reads password fields. Reads only when you press the button, or WhatsApp chats if the switch is on. Nothing leaves the phone.",
+                    "Never reads password fields. Reads only when you press the button, WhatsApp chats if the switch is on, or a chat you asked Hy to reply in. Never sends without your tap. Nothing leaves the phone.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

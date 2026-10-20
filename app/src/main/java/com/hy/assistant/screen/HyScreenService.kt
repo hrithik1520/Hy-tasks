@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -20,6 +21,11 @@ import com.hy.assistant.core.ScreenText
 import com.hy.assistant.core.WhatsAppScreen
 import com.hy.assistant.notifications.MessageStore
 import com.hy.assistant.notifications.StoredMessage
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Reads on-screen text through Accessibility, only:
@@ -42,6 +48,7 @@ class HyScreenService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        runCatching { panel.hide() }
         buttonCallback?.let { accessibilityButtonController.unregisterAccessibilityButtonCallback(it) }
         if (instance === this) instance = null
         super.onDestroy()
@@ -59,11 +66,11 @@ class HyScreenService : AccessibilityService() {
         main.postDelayed(r, 1200)
     }
 
-    private fun readWhatsAppChat() {
+    private fun readWhatsAppChat(pkg: String = WHATSAPP): WhatsAppScreen.Chat? {
         try {
-            val root = appWindowRoot(WHATSAPP) ?: return
+            val root = appWindowRoot(pkg) ?: return null
             val width = resources.displayMetrics.widthPixels
-            val chat = WhatsAppScreen.parse(toScreenNode(root), width) ?: return
+            val chat = WhatsAppScreen.parse(toScreenNode(root), width) ?: return null
             val now = System.currentTimeMillis()
             // Keep on-screen order; times come from the bubble labels when readable.
             val msgs = chat.messages.mapIndexed { i, m ->
@@ -72,9 +79,97 @@ class HyScreenService : AccessibilityService() {
             }
             val added = MessageStore.mergeFromScreen(chat.name, msgs)
             if (added > 0) Log.i(TAG, "read $added new messages from the WhatsApp chat on screen")
+            return chat
         } catch (e: Exception) {
             Log.w(TAG, "WhatsApp screen read failed", e)
+            return null
         }
+    }
+
+    // ---- Acting in WhatsApp (only when the user asked; Send needs their tap) -----------------
+
+    /** Waits until a WhatsApp chat screen is showing, reads it into Hy's history, and returns it. */
+    suspend fun waitForWhatsAppChat(pkg: String, timeoutMs: Long): WhatsAppScreen.Chat? {
+        val end = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < end) {
+            delay(400)
+            val chat = withContext(Dispatchers.Main) { readWhatsAppChat(pkg) }
+            if (chat != null) {
+                delay(500) // let the last messages render, then read once more
+                return withContext(Dispatchers.Main) { readWhatsAppChat(pkg) } ?: chat
+            }
+        }
+        return null
+    }
+
+    /** Puts [text] into WhatsApp's message box (the user can still edit it there). */
+    suspend fun typeIntoWhatsApp(pkg: String, text: String): Boolean = withContext(Dispatchers.Main) {
+        val root = appWindowRoot(pkg) ?: return@withContext false
+        val box = root.findAccessibilityNodeInfosByViewId("$pkg:id/entry").firstOrNull()
+            ?: findNode(root) { it.className?.toString()?.endsWith("EditText") == true && it.isEditable }
+            ?: return@withContext false
+        box.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
+        box.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+    }
+
+    /** Presses WhatsApp's Send button. Called only after the user tapped Send on Hy's panel. */
+    suspend fun pressWhatsAppSend(pkg: String): Boolean = withContext(Dispatchers.Main) {
+        delay(200) // the mic button turns into Send once text is in the box
+        val root = appWindowRoot(pkg) ?: return@withContext false
+        var btn = root.findAccessibilityNodeInfosByViewId("$pkg:id/send").firstOrNull()
+            ?: findNode(root) { it.contentDescription?.toString().equals("Send", ignoreCase = true) }
+            ?: return@withContext false
+        while (!btn.isClickable) btn = btn.parent ?: return@withContext false
+        btn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
+    private fun findNode(n: AccessibilityNodeInfo, depth: Int = 0, match: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+        if (match(n)) return n
+        if (depth > 40) return null
+        for (i in 0 until n.childCount) {
+            val c = n.getChild(i) ?: continue
+            findNode(c, depth + 1, match)?.let { return it }
+        }
+        return null
+    }
+
+    // ---- Hy's floating panel (an accessibility overlay: no extra permission) ----------------
+
+    private val panel by lazy { HyPanel(this) }
+
+    suspend fun showPanel(title: String, body: String) = withContext(Dispatchers.Main) { panel.show(title, body) }
+
+    suspend fun showMessage(message: String, copyText: String?) = withContext(Dispatchers.Main) {
+        panel.show("Hy", message, buttons = listOfNotNull(
+            copyText?.let { t -> "Copy" to { copy(t); panel.hide() } },
+            "Close" to { panel.hide() },
+        ))
+    }
+
+    /** Shows the draft with Send / Cancel and waits for the user's choice (false on Cancel or timeout). */
+    suspend fun askToSend(title: String, draft: String): Boolean {
+        val choice = CompletableDeferred<Boolean>()
+        withContext(Dispatchers.Main) {
+            panel.show(title, draft, buttons = listOf(
+                "Cancel" to { choice.complete(false) },
+                "Send" to { choice.complete(true) },
+            ))
+        }
+        return withTimeoutOrNull(5 * 60_000L) { choice.await() } ?: false
+    }
+
+    suspend fun flashPanel(message: String) {
+        showPanel("Hy", message)
+        delay(1800)
+        hidePanel()
+    }
+
+    suspend fun hidePanel() = withContext(Dispatchers.Main) { panel.hide() }
+
+    private fun copy(text: String) {
+        getSystemService(android.content.ClipboardManager::class.java)
+            .setPrimaryClip(android.content.ClipData.newPlainText("Hy draft", text))
     }
 
     /** Reads the app currently on screen and opens Hy with it. */

@@ -101,6 +101,9 @@ fun HomeScreen(
     val agentMode by vm.agentMode.collectAsState()
     val savedFile by vm.savedFile.collectAsState()
     val shared by vm.shared.collectAsState()
+    val needContacts by vm.needContacts.collectAsState()
+    val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.retryPhone(it) }
+    LaunchedEffect(needContacts) { if (needContacts != null) contactsPermission.launch(Manifest.permission.READ_CONTACTS) }
     var showAllFeed by rememberSaveable { mutableStateOf(false) }
     var askedNotify by rememberSaveable { mutableStateOf(false) }
 

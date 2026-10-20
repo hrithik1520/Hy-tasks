@@ -18,6 +18,8 @@ sealed interface AgentAction {
     data class RunCommand(val command: String) : AgentAction
     /** Save a fact about the user ("note that I'm vegetarian"). */
     data class Remember(val fact: String) : AgentAction
+    /** Do something on the phone: open an app or WhatsApp chat, SMS, call, alarm, timer, maps, YouTube. */
+    data class Phone(val action: PhoneAction) : AgentAction
     /** Needs several steps / tools combined: hand the whole request to the multi-step orchestrator. */
     data object MultiStep : AgentAction
 }
@@ -31,7 +33,7 @@ object Agent {
 
     /** GBNF: exactly one compact JSON object per action. */
     val GRAMMAR = """
-        root ::= answer | digest | reply | draft | summarize | setmode | chatmode | search | browse | runcmd | remember | multistep
+        root ::= answer | digest | reply | draft | summarize | setmode | chatmode | search | browse | runcmd | remember | multistep | phone
         answer ::= "{\"action\":\"answer\"}"
         digest ::= "{\"action\":\"digest\"}"
         reply ::= "{\"action\":\"reply\",\"contact\":" str ",\"message\":" str "}"
@@ -42,6 +44,8 @@ object Agent {
         search ::= "{\"action\":\"search\",\"query\":" str "}"
         browse ::= "{\"action\":\"browse\",\"target\":" str "}"
         runcmd ::= "{\"action\":\"run_command\",\"command\":" str "}"
+        phone ::= "{\"action\":\"phone\",\"do\":" pkind ",\"target\":" str ",\"text\":" str "}"
+        pkind ::= "\"open_app\"" | "\"whatsapp\"" | "\"sms\"" | "\"call\"" | "\"alarm\"" | "\"timer\"" | "\"navigate\"" | "\"youtube\""
         multistep ::= "{\"action\":\"agent\"}"
         remember ::= "{\"action\":\"remember\",\"fact\":" str "}"
         str ::= "\"" ([^"\\\x7F\x00-\x1F] | "\\" ["\\/bfnrt]){0,300} "\""
@@ -66,6 +70,7 @@ object Agent {
                 - run_command: user wants to run a terminal/shell command (Termux or Android shell). "command" is one shell command.
                 - remember: the user tells you a lasting fact or preference to keep (about them, people, plans). "fact" restates it.
                 - agent: the request needs SEVERAL steps or tools combined (look something up AND message someone, check something then act on it, compare several things).
+                - phone: do something on the phone: open an app, open a WhatsApp chat, SMS, call, set an alarm or timer, navigate, play on YouTube. Use it only when the user wants the phone to DO one of these. "text" is the message if one is given, else "".
                 - answer: anything else — questions about messages or notifications, writing, explaining, lists, math, ideas, advice.
                 Examples:
                 "tell mom I'll be late for dinner" -> {"action":"reply","contact":"mom","message":"I'll be late for dinner"}
@@ -81,6 +86,8 @@ object Agent {
                 "don't auto reply in college gang" -> {"action":"set_chat_mode","contact":"college gang","mode":"off"}
                 "did anyone mention dinner?" -> {"action":"answer"}
                 "note that I'm vegetarian" -> {"action":"remember","fact":"I'm vegetarian"}
+                "ping my brother on whatsapp that i'll be late" -> {"action":"phone","do":"whatsapp","target":"brother","text":"I'll be late"}
+                "fire up instagram" -> {"action":"phone","do":"open_app","target":"instagram","text":""}
                 "find today's gold price and send it to dad" -> {"action":"agent"}
                 "check my storage and if it's under 5GB tell me what to delete" -> {"action":"agent"}
                 "compare iphone 17 and pixel 10 prices and save the cheaper one to memory" -> {"action":"agent"}
@@ -187,6 +194,11 @@ object Agent {
             "search" -> fields["query"]?.trim()?.takeIf { it.isNotEmpty() }?.let { AgentAction.Search(it) }
             "browse" -> fields["target"]?.trim()?.takeIf { it.isNotEmpty() }?.let { AgentAction.Browse(it) }
             "agent" -> AgentAction.MultiStep
+            "phone" -> {
+                val kind = PhoneAction.Kind.of(fields["do"].orEmpty())
+                val target = fields["target"]?.trim().orEmpty()
+                if (kind == null || target.isEmpty()) null else AgentAction.Phone(PhoneAction(kind, target, fields["text"]?.trim().orEmpty()))
+            }
             "remember" -> fields["fact"]?.trim()?.takeIf { it.isNotEmpty() }?.let { AgentAction.Remember(it) }
             "run_command" -> fields["command"]?.trim()?.takeIf { it.isNotEmpty() }?.let { AgentAction.RunCommand(it) }
             else -> null

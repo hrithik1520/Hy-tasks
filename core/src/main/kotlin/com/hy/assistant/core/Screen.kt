@@ -80,7 +80,7 @@ object WhatsAppScreen {
             val time = nodes.drop(i + 1).take(4).firstOrNull { it.text?.trim()?.let(timeRx::matches) == true }?.text?.trim()
             messages += Message(text, fromMe, time)
         }
-        return if (messages.isEmpty()) null else Chat(name, messages)
+        return Chat(name, messages) // a new chat has a name but no messages yet
     }
 
     /** "8:53 pm" today → epoch millis (null if it can't be read). */

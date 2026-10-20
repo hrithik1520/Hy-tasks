@@ -94,6 +94,12 @@ Updates: install the newer `HyAssistant.apk` over the old one. Your data and mod
   Reply ideas, or ask anything. Optionally (experimental) it reads the WhatsApp chat you have open
   so replies and summaries see the whole conversation, not just notifications. It never reads
   password fields, never taps or types, and keeps everything on the phone.
+- **Phone actions**: "open Spotify", "set alarm for 6:30am", "timer 10 minutes", "call Dad",
+  "sms Mom saying …", "navigate to Goa airport", "play lofi on YouTube".
+- **WhatsApp for anyone in your contacts** (needs Screen reading): "message Rahul on WhatsApp saying
+  I'm late" or "reply to Priya on WhatsApp". Hy opens the chat, reads it, drafts a reply (or polishes
+  yours), types it into WhatsApp's message box, then shows **Send / Cancel** on a small panel. Nothing
+  is sent until you tap Send. "Reply to X" also uses this when X isn't in Hy's notification chats.
 - **Quick Settings tile**: switch Manual/Auto from the notification shade (edit tiles → "Hy auto-reply").
 - **Morning briefing** (optional): a daily notification at your chosen time with unread chats and
   important payments, deliveries and reminders.

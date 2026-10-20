@@ -2,5 +2,5 @@
     <string name="app_name">Hy Assistant</string>
     <string name="listener_label">Hy Assistant – read WhatsApp notifications</string>
     <string name="screen_service_label">Hy · read screen</string>
-    <string name="screen_service_description">Lets Hy read the text on your screen when you tap the accessibility button (\"Ask Hy about this screen\"), and, if you turn it on in Hy\'s settings, read the WhatsApp chat you have open so replies see the whole conversation. Password fields are never read. Everything stays on this phone; nothing is uploaded.</string>
+    <string name="screen_service_description">Lets Hy read the text on your screen when you tap the accessibility button, read the WhatsApp chat you have open (if you turn that on in Hy\'s settings), and, only when you ask it to reply to someone, open their WhatsApp chat and type a draft. Hy never presses Send until you tap Send on its panel. Password fields are never read. Everything stays on this phone.</string>
 </resources>

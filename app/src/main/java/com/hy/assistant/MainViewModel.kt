@@ -14,6 +14,9 @@ import com.hy.assistant.core.Memory
 import com.hy.assistant.core.MemoryFact
 import com.hy.assistant.core.Turn
 import com.hy.assistant.agents.AgentRunner
+import com.hy.assistant.actions.PhoneActionRunner
+import com.hy.assistant.core.PhoneAction
+import com.hy.assistant.core.PhoneActions
 import com.hy.assistant.core.Export
 import com.hy.assistant.core.ExportFormat
 import com.hy.assistant.tools.FileSaver
@@ -223,6 +226,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val big get() = settings.current.contextSize >= 4096
     private fun history(maxChars: Int) = Conversation.historyBlock(ConversationStore.turns.value, maxChars)
     private fun memory() = MemoryStore.promptBlock(if (big) 800 else 400)
+
+    // ---- Phone actions --------------------------------------------------------------------------
+
+    /** An action waiting for the Contacts permission (the UI asks, then calls [retryPhone]). */
+    private val _needContacts = MutableStateFlow<PhoneAction?>(null)
+    val needContacts: StateFlow<PhoneAction?> = _needContacts.asStateFlow()
+
+    private fun whatsAppOr(contact: String, gist: String, otherwise: () -> Unit): () -> Unit = {
+        if (com.hy.assistant.screen.HyScreenService.instance != null) runPhone(PhoneAction(PhoneAction.Kind.WHATSAPP, contact, gist))
+        else otherwise()
+    }
+
+    fun runPhone(action: PhoneAction) {
+        val title = when (action.kind) {
+            PhoneAction.Kind.WHATSAPP -> "WhatsApp · ${action.target}"
+            else -> action.kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() } + " · " + action.target
+        }
+        _output.value = AssistantOutput(title, "Working…", running = true)
+        // App scope: Hy goes to the background while WhatsApp is open; the flow must survive that.
+        app.appScope.launch {
+            val out = try {
+                PhoneActionRunner.run(app, action)
+            } catch (e: Exception) {
+                PhoneActionRunner.Outcome.Failed(e.message ?: "Something went wrong")
+            }
+            when (out) {
+                is PhoneActionRunner.Outcome.Done -> _output.value = AssistantOutput(title, out.message, running = false)
+                is PhoneActionRunner.Outcome.Failed -> _output.value = AssistantOutput(title, "", running = false, error = out.message)
+                PhoneActionRunner.Outcome.NeedContacts -> {
+                    _output.value = AssistantOutput(title, "Hy needs access to your contacts to find ${action.target}.", running = false)
+                    _needContacts.value = action
+                }
+            }
+        }
+    }
+
+    /** Called after the Contacts permission dialog. */
+    fun retryPhone(granted: Boolean) {
+        val a = _needContacts.value ?: return
+        _needContacts.value = null
+        if (granted) runPhone(a) else _output.value = AssistantOutput("Contacts", "", false, error = "Without contacts access Hy can't find ${a.target}.")
+    }
 
     // ---- Speed test (Models screen) -----------------------------------------------------------
 
@@ -473,6 +518,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // "agent: …" or Agent mode → multi-step run.
         val agentGoal = Regex("""^(?:agent|/agent)[:\s]+(.+)$""", RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)
         if (agentGoal != null || _agentMode.value) return startAgent(agentGoal ?: text)
+        // Phone actions: open apps / WhatsApp chats, SMS, calls, alarms, timers, maps, YouTube.
+        PhoneActions.parse(text)?.let { return runPhone(it) }
         val names = chats.value.map { it.name }
         val hasModel = models.activeModelFile() != null
         // If a rule matched but the name isn't a known chat, the rule probably misfired
@@ -481,8 +528,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         when (val cmd = parsed) {
             Command.Digest -> digest()
             is Command.Summarize -> withChat(cmd.contact, fallback) { summarize(it.key) }
-            is Command.DraftReply -> withChat(cmd.contact, fallback) { draftReply(it.key, null) }
-            is Command.Reply -> withChat(cmd.contact, fallback) { draftReply(it.key, cmd.gist) }
+            // Not in Hy's notification chats? With screen reading on, open the chat in WhatsApp instead.
+            is Command.DraftReply -> withChat(cmd.contact, whatsAppOr(cmd.contact, "", fallback)) { draftReply(it.key, null) }
+            is Command.Reply -> withChat(cmd.contact, whatsAppOr(cmd.contact, cmd.gist, fallback)) { draftReply(it.key, cmd.gist) }
             is Command.Unknown -> if (hasModel) runAgent(text) else showNotFoundOrHelp(text)
             else -> Unit
         }
@@ -538,11 +586,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _route.value = "terminal"
             }
             AgentAction.MultiStep -> startAgent(request)
+            is AgentAction.Phone -> runPhone(action.action)
             is AgentAction.Remember -> _output.value = AssistantOutput("Memory", rememberText(action.fact), running = false)
             AgentAction.Digest -> digest()
             is AgentAction.Summarize -> withChat(action.contact, notFound(action.contact)) { summarize(it.key) }
-            is AgentAction.DraftReply -> withChat(action.contact, notFound(action.contact)) { draftReply(it.key, null) }
-            is AgentAction.Reply -> withChat(action.contact, notFound(action.contact)) { chat ->
+            is AgentAction.DraftReply -> withChat(action.contact, whatsAppOr(action.contact, "", notFound(action.contact))) { draftReply(it.key, null) }
+            is AgentAction.Reply -> withChat(action.contact, whatsAppOr(action.contact, action.message, notFound(action.contact))) { chat ->
                 _output.value = null
                 // The model already wrote the final text; the confirmation card still applies.
                 _proposal.value = ReplyProposal(chat.key, chat.name, chat.packageName, ReplyStyle.finish(action.message, chat, settings.current), false, chat.canReply)
