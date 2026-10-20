@@ -68,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.hy.assistant.MainViewModel
+import com.hy.assistant.planner.CalendarRepo
 import com.hy.assistant.ReplyMode
 import com.hy.assistant.auto.ActivityLog
 import com.hy.assistant.llm.EngineState
@@ -117,6 +118,10 @@ fun HomeScreen(
     val needContacts by vm.needContacts.collectAsState()
     val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.retryPhone(it) }
     LaunchedEffect(needContacts) { if (needContacts != null) contactsPermission.launch(Manifest.permission.READ_CONTACTS) }
+    val needCalendar by vm.needCalendar.collectAsState()
+    val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r -> vm.retryPlan(r.values.all { it }) }
+    LaunchedEffect(needCalendar) { if (needCalendar != null) calendarPermission.launch(CalendarRepo.PERMISSIONS) }
+    val reminders by vm.reminders.collectAsState()
     var showAllFeed by rememberSaveable { mutableStateOf(false) }
     var askedNotify by rememberSaveable { mutableStateOf(false) }
 
@@ -326,6 +331,12 @@ fun HomeScreen(
                         onModels = openModels,
                     )
                 }
+            }
+
+            // ---- Reminders --------------------------------------------------------------------------
+            if (reminders.isNotEmpty()) {
+                item("reminders-header") { SectionHeader("Upcoming") }
+                items(reminders.take(5), key = { "rem-${it.id}" }) { r -> Box(Modifier.animateItem()) { ReminderLine(r) { vm.removeReminder(r.id) } } }
             }
 
             // ---- What Hy did on its own ----------------------------------------------------------

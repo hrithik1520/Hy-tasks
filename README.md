@@ -94,6 +94,16 @@ Updates: install the newer `HyAssistant.apk` over the old one. Your data and mod
   Reply ideas, or ask anything. Optionally (experimental) it reads the WhatsApp chat you have open
   so replies and summaries see the whole conversation, not just notifications. It never reads
   password fields, never taps or types, and keeps everything on the phone.
+- **3 reply choices** (Manual mode): each suggestion notification shows three different replies
+  (the natural one, a very short one, and a different answer) as buttons. Tap one to send it, or
+  type your own. Turn it off in Settings → Automation to get a single suggestion.
+- **Reminders**: "remind me to call Mom at 6", "remind me in 20 minutes to check the oven",
+  "remind me tomorrow morning to pay rent". They ring at the exact minute (also with the screen off)
+  with **Done / Snooze 10 min**, show under *Upcoming* on the home screen, and survive a restart.
+  "Show my reminders" lists them.
+- **Calendar** (asks for calendar access on first use; works with Google Calendar): "what's my day",
+  "what's on my calendar tomorrow", "am I free at 5", "add meeting with Priya tomorrow at 4pm to my
+  calendar", "schedule a call with Rahul on Friday at 11 for 30 minutes".
 - **Phone actions**: "open Spotify", "set alarm for 6:30am", "timer 10 minutes", "call Dad",
   "sms Mom saying …", "navigate to Goa airport", "play lofi on YouTube".
 - **WhatsApp for anyone in your contacts** (needs Screen reading): "message Rahul on WhatsApp saying
@@ -112,9 +122,14 @@ Updates: install the newer `HyAssistant.apk` over the old one. Your data and mod
   phone with a small notification (40 MB voice model, downloaded once). It pauses during calls and
   opens Hy straight into a conversation, over the lock screen for questions.
 - **Quick Settings tile**: switch Manual/Auto from the notification shade (edit tiles → "Hy auto-reply").
-- **Morning briefing** (optional): a daily notification at your chosen time with unread chats and
-  important payments, deliveries and reminders.
+- **Morning briefing** (optional): a daily notification at your chosen time with today's calendar
+  and reminders, unread chats, and important payments and deliveries.
 - **Speed test** in Models: times a command, a cached command and a reply on *your* phone.
+- **GPU speed-up** (Models → GPU speed-up, off until tested): runs the AI on the phone's Qualcomm
+  Adreno GPU through llama.cpp's OpenCL backend. **Test GPU** runs the same prompt on the CPU and
+  the GPU, and turns the GPU on only if it is faster *and* gives the same answer. Phones without an
+  Adreno GPU stay on the CPU. If the GPU ever crashes the app, Hy switches back to the CPU on the
+  next start.
 
 ## How it works (and its limits)
 
@@ -132,7 +147,8 @@ button**. This means:
   otherwise Android may pause Hy with the screen off and replies come late.
 
 The AI is [llama.cpp](https://github.com/ggml-org/llama.cpp) compiled into the app (CPU,
-built for the Armv8.2 baseline with dot-product instructions that every recent phone has) running a
+built for the Armv8.2 baseline with dot-product instructions that every recent phone has; plus the
+OpenCL backend for Adreno GPUs, whose driver is opened at runtime only if the phone has one) running a
 quantized GGUF model.
 Commands are understood by plain rules, and contacts are matched by fuzzy name matching.
 The model only writes text. It never picks recipients or triggers actions.
@@ -170,7 +186,7 @@ CI builds every push and publishes the APK as a GitHub release. Locally (Android
 NDK required):
 
 ```bash
-scripts/fetch-llama.sh            # clones the pinned llama.cpp (llama-version.txt)
+scripts/fetch-llama.sh            # clones the pinned llama.cpp (llama-version.txt) and the OpenCL headers
 ./gradlew :core:test              # logic tests
 ./gradlew :app:assembleRelease    # APK (debug-signed unless HY_KEYSTORE_PATH is set)
 ```

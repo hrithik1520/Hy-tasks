@@ -97,6 +97,30 @@ object Prompts {
     }
 
     /**
+     * Three different replies for the user to pick from (Manual mode chips): the best reply, a very
+     * short one, and one with a different answer. Grammar-constrained JSON (see [ReplyChoices]).
+     */
+    fun replyChoices(chatName: String, lines: List<ChatLine>, userName: String, tone: Tone, styleRules: String = ""): Prompt {
+        val me = userName.ifBlank { "the user" }
+        return Prompt(
+            system = "You suggest WhatsApp replies for $me to choose from. Tone: ${tone.description}. $DATA_RULE " +
+                "Give three different replies in English that $me could send, as JSON:\n" +
+                "- \"reply\": the most natural reply that answers what they said or asked, at most 2 sentences\n" +
+                "- \"short\": a very short reply, at most 5 words\n" +
+                "- \"other\": a reply with a different answer, for example saying no, suggesting another time, or asking a question\n" +
+                "Never invent facts about $me. Example:\n" +
+                "Them: want to grab lunch tomorrow? → {\"reply\":\"Sure, lunch tomorrow sounds good! What time?\",\"short\":\"Sure, sounds good\"," +
+                "\"other\":\"Can't tomorrow, how about Friday?\"}" +
+                (if (styleRules.isBlank()) "" else "\n$styleRules"),
+            user = "<messages>\nChat: ${safeName(chatName)}\n${transcript(lines, myName = userName)}\n</messages>" + latest(lines, userName) +
+                "\nWrite three replies $me could send back to ${otherName(lines.lastOrNull { !it.fromMe }?.sender ?: "", userName)}.",
+            maxTokens = 160,
+            temperature = 0.5f,
+            grammar = ReplyChoices.GRAMMAR,
+        )
+    }
+
+    /**
      * Auto-reply (sent without the user looking). The model only CHOOSES: "hold" for anything about
      * the user's activity, location, plans or decisions (the app then sends a holding message, so
      * nothing is ever made up), or "reply" with short text for thanks, wishes, greetings and acks.
@@ -189,6 +213,33 @@ object TextCleanup {
         }
         return s
     }
+}
+
+/** Parsing for [Prompts.replyChoices]. */
+object ReplyChoices {
+    val GRAMMAR = """
+        root ::= "{\"reply\":" t ",\"short\":" t ",\"other\":" t "}"
+        t ::= "\"" ([^"\\\x7F\x00-\x1F] | "\\" ["\\/bfnrt]){1,160} "\""
+    """.trimIndent()
+
+    /**
+     * The choices in order (best, short, other), each cleaned by [finish], without blanks or
+     * near-duplicates. Output that isn't the expected JSON is treated as a single plain reply.
+     */
+    fun parse(raw: String, finish: (String) -> String = { TextCleanup.cleanReply(it) }): List<String> {
+        val f = Agent.parseFlatObject(TextCleanup.stripThinking(raw).trim())
+        val texts = if (f == null) listOf(raw) else listOfNotNull(f["reply"], f["short"], f["other"])
+        val out = mutableListOf<String>()
+        for (t in texts) {
+            val c = finish(t).trim()
+            if (c.isEmpty()) continue
+            if (out.any { key(it) == key(c) }) continue
+            out += c
+        }
+        return out
+    }
+
+    private fun key(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
 }
 
 /** Parsing and holding messages for [Prompts.autoReply]. */

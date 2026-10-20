@@ -4,6 +4,7 @@
 #include <android/log.h>
 #include <jni.h>
 
+#include <cstdlib>
 #include <exception>
 #include <string>
 
@@ -33,8 +34,14 @@ void log_callback(ggml_log_level level, const char *text, void *) {
 
 extern "C" {
 
-JNIEXPORT void JNICALL Java_com_hy_assistant_llm_LlamaNative_backendInit(JNIEnv *, jobject) {
+JNIEXPORT void JNICALL Java_com_hy_assistant_llm_LlamaNative_backendInit(JNIEnv *env, jobject, jstring cache_dir) {
     try {
+        // Compiled GPU kernels are cached here: the first GPU run compiles them (slow), later ones load them.
+        const char *dir = env->GetStringUTFChars(cache_dir, nullptr);
+        if (dir) {
+            setenv("GGML_OPENCL_KERNEL_CACHE_DIR", dir, 1);
+            env->ReleaseStringUTFChars(cache_dir, dir);
+        }
         llama_log_set(log_callback, nullptr);
         hy::backend_init();
     } catch (...) {
@@ -42,17 +49,26 @@ JNIEXPORT void JNICALL Java_com_hy_assistant_llm_LlamaNative_backendInit(JNIEnv 
     }
 }
 
-JNIEXPORT jlong JNICALL Java_com_hy_assistant_llm_LlamaNative_loadModel(JNIEnv *env, jobject, jstring path) {
+JNIEXPORT jstring JNICALL Java_com_hy_assistant_llm_LlamaNative_gpuName(JNIEnv *env, jobject) {
+    return env->NewStringUTF(hy::gpu_name().c_str());
+}
+
+JNIEXPORT jlong JNICALL Java_com_hy_assistant_llm_LlamaNative_loadModel(JNIEnv *env, jobject, jstring path, jboolean gpu) {
     const char *c_path = env->GetStringUTFChars(path, nullptr);
     if (!c_path) return 0;
     hy::Engine *engine = nullptr;
     try {
-        engine = hy::open(c_path);  // never throws itself, but the release below must always run
+        engine = hy::open(c_path, gpu == JNI_TRUE);  // never throws itself, but the release below must always run
     } catch (...) {
         hy::set_last_error("Native error while loading model");
     }
     env->ReleaseStringUTFChars(path, c_path);
     return reinterpret_cast<jlong>(engine);
+}
+
+JNIEXPORT jboolean JNICALL Java_com_hy_assistant_llm_LlamaNative_usesGpu(JNIEnv *, jobject, jlong handle) {
+    auto *engine = reinterpret_cast<hy::Engine *>(handle);
+    return engine && engine->gpu ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL Java_com_hy_assistant_llm_LlamaNative_freeModel(JNIEnv *, jobject, jlong handle) {
@@ -102,6 +118,15 @@ JNIEXPORT jint JNICALL Java_com_hy_assistant_llm_LlamaNative_generate(
 
 JNIEXPORT jint JNICALL Java_com_hy_assistant_llm_LlamaNative_lastReused(JNIEnv *, jobject, jlong handle, jint slot) {
     return hy::last_reused(reinterpret_cast<hy::Engine *>(handle), slot);
+}
+
+// [prompt tokens, prompt ms, generated tokens, generation ms] of the slot's last generate().
+JNIEXPORT jdoubleArray JNICALL Java_com_hy_assistant_llm_LlamaNative_lastTimings(JNIEnv *env, jobject, jlong handle, jint slot) {
+    hy::Timings t = hy::last_timings(reinterpret_cast<hy::Engine *>(handle), slot);
+    jdouble values[4] = {(double)t.prompt_tokens, t.prompt_ms, (double)t.gen_tokens, t.gen_ms};
+    jdoubleArray arr = env->NewDoubleArray(4);
+    if (arr) env->SetDoubleArrayRegion(arr, 0, 4, values);
+    return arr;
 }
 
 JNIEXPORT jstring JNICALL Java_com_hy_assistant_llm_LlamaNative_lastError(JNIEnv *env, jobject) {

@@ -167,6 +167,11 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     "Manual mode: draft a reply for every new message and show it as a notification with Send.",
                     s.proactiveSuggestions,
                 ) { v -> vm.settings.update { it.copy(proactiveSuggestions = v) } }
+                ToggleRow(
+                    "3 reply choices",
+                    "Show three different replies as tap-to-send buttons on the notification, instead of one.",
+                    s.replyChoices,
+                ) { v -> vm.settings.update { it.copy(replyChoices = v) } }
                 Spacer(Modifier.padding(4.dp))
                 Text("Auto mode: wait before sending", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

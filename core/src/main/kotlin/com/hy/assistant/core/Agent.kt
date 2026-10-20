@@ -163,7 +163,7 @@ object Agent {
     /** What Hy can really do, so "what can you do?" isn't answered with invented abilities. */
     private const val CAPABILITIES =
         "If asked what you can do: catch up on and summarize WhatsApp messages and notifications, draft and send replies " +
-            "(with the user's OK), auto-reply safely, search the web, open apps and websites, set alarms and timers, make " +
+            "(with the user's OK), auto-reply safely, search the web, open apps and websites, set alarms, timers and reminders, read and add calendar events, make " +
             "calls and SMS through the phone's apps, save answers as files, read the screen, and remember facts. You cannot " +
             "make payments, book things, or access the user's accounts. "
 

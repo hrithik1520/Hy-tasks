@@ -15,11 +15,18 @@ import com.hy.assistant.core.Prompts
 import com.hy.assistant.core.TextCleanup
 import com.hy.assistant.notifications.MessageStore
 import com.hy.assistant.notifications.NotificationFeed
+import com.hy.assistant.core.When
+import com.hy.assistant.planner.CalendarRepo
+import com.hy.assistant.planner.Reminders
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
-/** Daily briefing at the user's chosen hour: unread chats + important notifications. */
+/** Daily briefing at the user's chosen hour: today's calendar and reminders, unread chats, important notifications. */
 class BriefingWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -45,7 +52,20 @@ class BriefingWorker(context: Context, params: WorkerParameters) : CoroutineWork
             }
         }
         val extras = important.take(5).joinToString("\n") { "• ${it.category.label}: ${it.appName} — ${listOf(it.title, it.text).filter { t -> t.isNotBlank() }.joinToString(": ").take(70)}" }
-        val body = chatsText + if (extras.isNotEmpty()) "\n\n$extras" else ""
+        val today = LocalDate.now()
+        val endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val agenda = runCatching { CalendarRepo.eventsOn(applicationContext, today) }.getOrDefault(emptyList()).take(6).joinToString("\n") { e ->
+            "• " + (if (e.allDay) "All day" else When.describeTime(e.start.toLocalTime())) + "  " + e.title
+        }
+        val due = Reminders.items.value.filter { it.at < endOfDay }.take(5).joinToString("\n") { r ->
+            "• Reminder: ${r.text} (${When.describeTime(LocalDateTime.ofInstant(Instant.ofEpochMilli(r.at), ZoneId.systemDefault()).toLocalTime())})"
+        }
+        val body = listOf(
+            if (agenda.isNotEmpty()) "Today:\n$agenda" else "",
+            due,
+            chatsText,
+            extras,
+        ).filter { it.isNotBlank() }.joinToString("\n\n")
 
         if (HyNotifications.canPost(applicationContext)) {
             val n = NotificationCompat.Builder(applicationContext, HyNotifications.CH_BRIEFING)

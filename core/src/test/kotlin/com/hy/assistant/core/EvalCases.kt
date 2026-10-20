@@ -102,6 +102,19 @@ class EvalCases {
         reply("c-news", "Rahul", listOf(ChatLine("Rahul", "bro i got the job!!", 1, false)), "congrat,awesome,great,amazing,proud,wow", "", kind = "reply")
         reply("c-traffic", "Priya", listOf(ChatLine("Priya", "stuck in traffic, will be 10 mins late", 1, false)), "no problem,no worries,ok,sure,take your time,np,sorry to hear,hope,drive safe", "sorry for the delay,i'm late,i'll be late,i'm running late", kind = "reply")
         reply("c-gm", "Dad", listOf(ChatLine("Dad", "good night beta, sleep well", 1, false)), "night,sleep", "", kind = "reply")
+        // --- Reply choices (Manual mode chips): 3 distinct, in-context replies -----------------
+        fun choices(id: String, chat: String, lines: List<ChatLine>) {
+            out += Case(id, "choices", Prompts.replyChoices(chat, lines, "Hrithik", Tone.CASUAL, Humanizer.PROMPT_RULES), emptyMap())
+        }
+        choices("ch-coming", "Mom", listOf(ChatLine("Mom", "are you coming home for dinner?", 1, false)))
+        choices("ch-tonight", "Rahul", lines)
+        choices("ch-job", "Rahul", listOf(ChatLine("Rahul", "bro i got the job!!", 1, false)))
+        choices("ch-traffic", "Priya", listOf(ChatLine("Priya", "stuck in traffic, will be 10 mins late", 1, false)))
+        choices("ch-movie", "Priya", listOf(
+            ChatLine("Me", "free this weekend?", 1, true),
+            ChatLine("Priya", "yes! want to watch the new marvel movie on saturday evening?", 2, false),
+        ))
+        choices("ch-notes", "Office Team", listOf(ChatLine("Ankit", "can someone share the notes from today's meeting", 1, false)))
         // --- Butler manner (Hy's own answers only; letters stay in the user's voice) ----------
         out += Case("b-answer", "answer", Agent.answerPrompt("what can you do for me?", "", "Hrithik", persona = Butler.persona("sir")), emptyMap())
         // Writing tasks get no persona (Butler.appliesTo), like the app does.

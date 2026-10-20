@@ -20,6 +20,7 @@ object HyNotifications {
     private const val CH_SUGGEST = "suggestions"
     private const val CH_AUTO = "auto_replies"
     const val CH_BRIEFING = "briefing"
+    const val CH_REMINDERS = "reminders"
     const val KEY_TYPED_REPLY = "typed_reply"
 
     fun createChannels(context: Context) {
@@ -35,6 +36,11 @@ object HyNotifications {
             },
         )
         nm.createNotificationChannel(
+            NotificationChannel(CH_REMINDERS, "Reminders", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Reminders you asked Hy for"
+            },
+        )
+        nm.createNotificationChannel(
             NotificationChannel(CH_BRIEFING, "Daily briefing", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Your morning summary of unread chats and important notifications"
             },
@@ -47,16 +53,21 @@ object HyNotifications {
 
     fun idFor(chatKey: String) = 1000 + (chatKey.hashCode() and 0xFFFF)
 
-    /** Manual mode: suggested reply with Send / Reply / Open. */
-    fun suggestion(context: Context, chatKey: String, chatName: String, incoming: String, text: String, heldReason: String?) {
+    /**
+     * Manual mode: suggested reply with Send / Reply / Open. With several [choices], Android shows
+     * them as tap-to-send chips under the notification (the Reply action's choices); Send sends the first.
+     */
+    fun suggestion(context: Context, chatKey: String, chatName: String, incoming: String, choices: List<String>, heldReason: String?) {
+        val text = choices.first()
         val title = if (heldReason != null) "$chatName · needs you ($heldReason)" else "$chatName · suggested reply"
+        val shown = if (choices.size == 1) "➜ $text" else choices.joinToString("\n") { "➜ $it" }
         val b = base(context, CH_SUGGEST, chatKey)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("“${incoming.take(200)}”\n\n➜ $text"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("“${incoming.take(200)}”\n\n$shown"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .addAction(0, "Send", action(context, ActionReceiver.ACTION_SEND, chatKey, text, 1))
-            .addAction(typedReplyAction(context, chatKey))
+            .addAction(typedReplyAction(context, chatKey, choices.takeIf { it.size > 1 }))
             .addAction(0, "Open", openApp(context, chatKey))
         post(context, chatKey, b)
     }
@@ -132,7 +143,7 @@ object HyNotifications {
         )
     }
 
-    private fun typedReplyAction(context: Context, chatKey: String): NotificationCompat.Action {
+    private fun typedReplyAction(context: Context, chatKey: String, choices: List<String>? = null): NotificationCompat.Action {
         val i = Intent(context, ActionReceiver::class.java).setAction(ActionReceiver.ACTION_TYPED)
             .putExtra(ActionReceiver.EXTRA_CHAT, chatKey)
         // Must be mutable so the system can attach the typed text.
@@ -140,7 +151,9 @@ object HyNotifications {
             context, idFor(chatKey) * 8 + 4, i,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
-        val input = RemoteInput.Builder(KEY_TYPED_REPLY).setLabel("Type your reply").build()
+        val input = RemoteInput.Builder(KEY_TYPED_REPLY).setLabel("Type your reply")
+            .apply { if (choices != null) setChoices(choices.toTypedArray()) }
+            .build()
         return NotificationCompat.Action.Builder(0, "Reply", pi).addRemoteInput(input).setAllowGeneratedReplies(false).build()
     }
 

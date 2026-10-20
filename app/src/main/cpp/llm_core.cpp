@@ -1,6 +1,7 @@
 #include "llm_core.h"
 
 #include <algorithm>
+#include <chrono>
 #include <exception>
 #include <vector>
 
@@ -38,17 +39,41 @@ void backend_init() {
     }
 }
 
-Engine *open(const std::string &path) {
+std::string gpu_name() {
     try {
-        llama_model_params mp = llama_model_default_params();
-        mp.n_gpu_layers = 0;  // CPU only on phones
-        llama_model *model = llama_model_load_from_file(path.c_str(), mp);
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+            if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) return ggml_backend_dev_description(dev);
+        }
+    } catch (...) {
+    }
+    return "";
+}
+
+Engine *open(const std::string &path, bool gpu) {
+    try {
+        bool use_gpu = gpu && !gpu_name().empty();
+        llama_model *model = nullptr;
+        if (use_gpu) {
+            llama_model_params mp = llama_model_default_params();
+            mp.n_gpu_layers = 999;  // all layers: these models are small
+            model = llama_model_load_from_file(path.c_str(), mp);
+            use_gpu = model != nullptr;
+        }
+        if (!model) {
+            static ggml_backend_dev_t no_devices[] = {nullptr};
+            llama_model_params mp = llama_model_default_params();
+            mp.n_gpu_layers = 0;
+            mp.devices = no_devices;  // CPU only: also keeps big batches from being sent to the GPU
+            model = llama_model_load_from_file(path.c_str(), mp);
+        }
         if (!model) {
             set_error("Failed to load model: " + path);
             return nullptr;
         }
         Engine *e = new Engine();
         e->model = model;
+        e->gpu = use_gpu;
         return e;
     } catch (const std::exception &e) {
         set_error(std::string("Native error while loading model: ") + e.what());
@@ -74,6 +99,11 @@ void close(Engine *engine) {
 int last_reused(Engine *engine, int slot) {
     if (!engine || slot < 0 || slot >= kSlots) return 0;
     return g_last_reused[slot];
+}
+
+Timings last_timings(Engine *engine, int slot) {
+    if (!engine || slot < 0 || slot >= kSlots) return {};
+    return engine->timings[slot];
 }
 
 size_t complete_utf8_prefix(const std::string &bytes) {
@@ -131,6 +161,7 @@ bool ensure_session(Engine *e, Session &s, const GenParams &p) {
     cp.n_threads = p.n_threads;
     cp.n_threads_batch = p.n_threads;
     cp.no_perf = true;
+    cp.op_offload = e->gpu;
     s.ctx = llama_init_from_model(e->model, cp);
     if (!s.ctx) return false;
     s.n_ctx = p.n_ctx;
@@ -191,6 +222,12 @@ int generate_impl(Engine *engine, int slot, const std::string &system, const std
     }
     s.cached.resize(n_keep);
     g_last_reused[slot] = (int)n_keep;
+    using clock = std::chrono::steady_clock;
+    auto ms_since = [](clock::time_point t) { return std::chrono::duration<double, std::milli>(clock::now() - t).count(); };
+    Timings &timing = engine->timings[slot];
+    timing = Timings{};
+    timing.prompt_tokens = (int)(tokens.size() - n_keep);
+    const auto prompt_start = clock::now();
 
     for (size_t i = n_keep; i < tokens.size(); i += kBatch) {
         int n = (int)std::min<size_t>(kBatch, tokens.size() - i);
@@ -201,6 +238,8 @@ int generate_impl(Engine *engine, int slot, const std::string &system, const std
         }
         s.cached.insert(s.cached.end(), tokens.begin() + i, tokens.begin() + i + n);
     }
+
+    timing.prompt_ms = ms_since(prompt_start);
 
     llama_sampler_chain_params sp = llama_sampler_chain_default_params();
     sp.no_perf = true;
@@ -230,6 +269,7 @@ int generate_impl(Engine *engine, int slot, const std::string &system, const std
     int result = 0;
     std::string pending;
     char piece[256];
+    const auto gen_start = clock::now();
     for (int i = 0; i < p.max_tokens; i++) {
         llama_token tok = llama_sampler_sample(smpl, ctx, -1);
         if (llama_vocab_is_eog(vocab, tok)) break;
@@ -254,6 +294,8 @@ int generate_impl(Engine *engine, int slot, const std::string &system, const std
         s.cached.push_back(tok);
     }
     if (!pending.empty() && result >= 0) on_text(pending);
+    timing.gen_tokens = std::max(result, 0);
+    timing.gen_ms = ms_since(gen_start);
 
     return result;
 }

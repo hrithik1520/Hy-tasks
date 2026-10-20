@@ -11,8 +11,13 @@ object LlamaNative {
         System.loadLibrary("hyllm")
     }
 
-    external fun backendInit()
-    external fun loadModel(path: String): Long
+    /** [cacheDir]: where compiled GPU kernels are kept between runs. */
+    external fun backendInit(cacheDir: String)
+
+    /** The GPU llama.cpp can use (an Adreno GPU via OpenCL), or "" for none. Call after [backendInit]. */
+    external fun gpuName(): String
+    external fun loadModel(path: String, gpu: Boolean): Long
+    external fun usesGpu(handle: Long): Boolean
     external fun freeModel(handle: Long)
     external fun generate(
         handle: Long,
@@ -27,5 +32,8 @@ object LlamaNative {
         callback: TokenCallback,
     ): Int
     external fun lastReused(handle: Long, slot: Int): Int
+
+    /** [prompt tokens, prompt ms, generated tokens, generation ms] of the slot's last generate(). */
+    external fun lastTimings(handle: Long, slot: Int): DoubleArray
     external fun lastError(): String
 }

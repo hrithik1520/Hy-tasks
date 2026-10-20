@@ -35,6 +35,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -42,6 +43,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.hy.assistant.core.When
+import com.hy.assistant.planner.Reminder
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -295,5 +301,26 @@ fun FeedLine(f: FeedItem) {
             if (f.title.isNotBlank()) Text(f.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, color = MaterialTheme.colorScheme.onSurface)
             if (f.text.isNotBlank()) Text(f.text, style = MaterialTheme.typography.bodySmall, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** A pending reminder, with a button to remove it. */
+@Composable
+fun ReminderLine(r: Reminder, onDone: () -> Unit) {
+    val now = LocalDateTime.now()
+    val at = LocalDateTime.ofInstant(Instant.ofEpochMilli(r.at), ZoneId.systemDefault())
+    val due = !at.isAfter(now)
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(if (due) NothingRed else MaterialTheme.colorScheme.onSurfaceVariant))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(r.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 2)
+            Text(
+                if (due) "Due · " + When.describe(at, now) else When.describe(at, now).replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (due) NothingRed else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = onDone) { Icon(Icons.Filled.Check, contentDescription = "Done") }
     }
 }

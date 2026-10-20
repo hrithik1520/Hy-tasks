@@ -67,6 +67,10 @@ data class SettingsData(
     /** Butler manner for Hy's own answers (never in messages sent to others). */
     val butlerPersona: Boolean = true,
     val addressAs: Butler.Address = Butler.Address.NAME,
+    /** Run the model on the phone's GPU (Adreno, via OpenCL). Off until the speed test shows it helps. */
+    val useGpu: Boolean = false,
+    /** Manual mode: offer 3 reply choices as tap-to-send chips on the notification. */
+    val replyChoices: Boolean = true,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -119,6 +123,8 @@ class Settings(context: Context) {
             ttsVoice = prefs.getString("ttsVoice", null),
             butlerPersona = prefs.getBoolean("butlerPersona", d.butlerPersona),
             addressAs = runCatching { Butler.Address.valueOf(prefs.getString("addressAs", d.addressAs.name)!!) }.getOrDefault(d.addressAs),
+            useGpu = prefs.getBoolean("useGpu", d.useGpu),
+            replyChoices = prefs.getBoolean("replyChoices", d.replyChoices),
             emojiMode = runCatching { Humanizer.EmojiMode.valueOf(prefs.getString("emojiMode", d.emojiMode.name)!!) }.getOrDefault(d.emojiMode),
             searchEngine = runCatching { SearchEngine.valueOf(prefs.getString("searchEngine", d.searchEngine.name)!!) }.getOrDefault(d.searchEngine),
         )
@@ -158,6 +164,8 @@ class Settings(context: Context) {
             .putString("ttsVoice", d.ttsVoice)
             .putBoolean("butlerPersona", d.butlerPersona)
             .putString("addressAs", d.addressAs.name)
+            .putBoolean("useGpu", d.useGpu)
+            .putBoolean("replyChoices", d.replyChoices)
             .apply()
         _data.value = d
     }

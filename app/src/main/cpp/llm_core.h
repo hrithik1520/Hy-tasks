@@ -33,11 +33,21 @@ struct Session {
     std::vector<int> cached;  // tokens whose KV is in ctx (sequence 0)
 };
 
+// Speed of the last generate() call on a slot.
+struct Timings {
+    int prompt_tokens = 0;  // newly processed (not reused from the cache)
+    double prompt_ms = 0;
+    int gen_tokens = 0;
+    double gen_ms = 0;
+};
+
 constexpr int kSlots = 3;  // 0 = general, 1 = agent orchestrator, 2 = command router
 
 struct Engine {
     llama_model *model = nullptr;
+    bool gpu = false;  // layers offloaded to the GPU
     Session sessions[kSlots];
+    Timings timings[kSlots];
 };
 
 // Receives complete UTF-8 text chunks. Return false to stop generation.
@@ -45,8 +55,12 @@ using TextCallback = std::function<bool(const std::string &)>;
 
 void backend_init();
 
-// Returns nullptr on failure (see last_error()).
-Engine *open(const std::string &path);
+// Returns nullptr on failure (see last_error()). With `gpu`, the whole model is offloaded to the
+// first GPU llama.cpp found (if any); a GPU load that fails falls back to the CPU.
+Engine *open(const std::string &path, bool gpu = false);
+
+// Name of the GPU llama.cpp can use, or "" if there is none.
+std::string gpu_name();
 void close(Engine *engine);
 
 // Formats system+user with the model's built-in chat template (falls back to
@@ -60,6 +74,7 @@ int generate(Engine *engine, int slot, const std::string &system, const std::str
 
 // Tokens reused from the cache on the last generate() call for `slot` (for tests/logging).
 int last_reused(Engine *engine, int slot);
+Timings last_timings(Engine *engine, int slot);
 
 // Exposed for tests.
 std::string format_chat(llama_model *model, const std::string &system, const std::string &user);

@@ -38,6 +38,21 @@ def check(r):
         if d.get("kind") == "hold":
             return True, ""
         k, out = "reply", d.get("text", "")
+    if k == "choices":
+        d = flat(out)
+        if not isinstance(d, dict) or not all(d.get(x, "").strip() for x in ("reply", "short", "other")):
+            return False, "invalid JSON"
+        texts = [d["reply"], d["short"], d["other"]]
+        if len({re.sub(r"\W", "", t.lower()) for t in texts}) < 3:
+            return False, "duplicates"
+        if len(d["short"].split()) > 6:
+            return False, f"short has {len(d['short'].split())} words"
+        tells = [t for t in TELLS if any(re.search(t, x, re.I) for x in texts)]
+        if tells:
+            return False, "tells: " + ", ".join(tells)
+        if any(len(t) > 220 for t in texts):
+            return False, "too long"
+        return True, ""
     tells = [t for t in TELLS if re.search(t, out, re.I)]
     if k == "reply":
         sentences = len(re.findall(r"[.!?](\s|$)", out.strip())) or 1
@@ -65,7 +80,7 @@ for path in sys.argv[1:]:
         ok, why = check(r)
         by.setdefault(r["kind"], []).append(ok)
         mark = "PASS" if ok else "FAIL"
-        print(f"{mark} {r['id']:<14} {r['ms']:>6} ms  {r['out'][:90]!r} {why}")
+        print(f"{mark} {r['id']:<14} {r['ms']:>6} ms  {r['out'][:(200 if r['kind'] == 'choices' else 90)]!r} {why}")
     total = sum(sum(v) for v in by.values())
     print("--- " + "  ".join(f"{k}: {sum(v)}/{len(v)}" for k, v in by.items()) +
           f"  | total {total}/{len(rows)}  | avg {sum(r['ms'] for r in rows) // len(rows)} ms/case")

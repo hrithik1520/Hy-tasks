@@ -10,6 +10,7 @@ import com.hy.assistant.memory.MemoryStore
 import com.hy.assistant.models.ModelManager
 import com.hy.assistant.notifications.MessageStore
 import com.hy.assistant.notifications.NotificationFeed
+import com.hy.assistant.planner.Reminders
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,9 +35,15 @@ class HyApp : Application() {
         ActivityLog.init(this)
         MemoryStore.init(this)
         ConversationStore.init(this)
+        Reminders.init(this)
         HyNotifications.createChannels(this)
         models = ModelManager(this, settings, appScope)
-        engine = LlamaEngine(appScope)
+        engine = LlamaEngine(appScope, this) { settings.current.useGpu }
+        if (engine.gpuCrashedLastRun && settings.current.useGpu) {
+            // The GPU driver took the app down last time: back to the CPU (the user can test again).
+            settings.update { it.copy(useGpu = false) }
+            ActivityLog.add(ActivityLog.Kind.FAILED, "GPU", "Switched back to the CPU", "the app stopped while using the GPU")
+        }
         automation = Automation(this, settings, models, engine, appScope)
     }
 

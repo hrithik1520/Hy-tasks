@@ -3,6 +3,8 @@ package com.hy.assistant.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -49,6 +52,8 @@ fun ModelsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () -> U
     val transfer by models.transfer.collectAsState()
     val settings by vm.settings.data.collectAsState()
     val speed by vm.speed.collectAsState()
+    val gpuTest by vm.gpuTest.collectAsState()
+    val onGpu by vm.onGpu.collectAsState()
     var customUrl by rememberSaveable { mutableStateOf("") }
     val busy = transfer is TransferState.Downloading || transfer is TransferState.Importing
 
@@ -82,6 +87,32 @@ fun ModelsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () -> U
                         speed ?: "Times the selected model on this phone: a command, a cached command and a WhatsApp reply.",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                }
+            }
+            item {
+                SectionCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("GPU speed-up", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                when {
+                                    onGpu -> "On · running on the GPU"
+                                    settings.useGpu -> "On · used from the next request"
+                                    else -> "Off · running on the CPU"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (settings.useGpu) NothingRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(checked = settings.useGpu, onCheckedChange = { on -> vm.settings.update { it.copy(useGpu = on) } })
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        gpuTest ?: "Runs the AI on your phone's graphics chip (Qualcomm Adreno). Test first: it compares CPU and GPU on this phone, checks the GPU gives the same answer, and turns it on only if it's faster.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedButton(onClick = vm::runGpuTest, enabled = settings.activeModel != null) { Text("Test GPU") }
                 }
             }
             item {

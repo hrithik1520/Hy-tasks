@@ -9,6 +9,7 @@ import com.hy.assistant.core.AutoDecision
 import com.hy.assistant.core.AutoReply
 import com.hy.assistant.core.AutomationPolicy
 import com.hy.assistant.core.Prompts
+import com.hy.assistant.core.ReplyChoices
 import com.hy.assistant.llm.LlamaEngine
 import com.hy.assistant.models.ModelManager
 import com.hy.assistant.notifications.Chat
@@ -130,15 +131,19 @@ class Automation(
         val sendAutomatically = decision == AutoDecision.Auto
         val holdReason = (decision as? AutoDecision.Hold)?.reason
 
-        val prompt = if (sendAutomatically) {
-            Prompts.autoReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, ReplyStyle.promptRules(chat, s))
-        } else {
-            Prompts.draftReply(chat.name, chat.messages.map { it.toChatLine() }, s.userName, s.tone, styleRules = ReplyStyle.promptRules(chat, s))
+        // Manual suggestions offer 3 tap-to-send choices when enabled (one AI call either way).
+        val withChoices = !sendAutomatically && s.replyChoices
+        val lines = chat.messages.map { it.toChatLine() }
+        val prompt = when {
+            sendAutomatically -> Prompts.autoReply(chat.name, lines, s.userName, s.tone, ReplyStyle.promptRules(chat, s))
+            withChoices -> Prompts.replyChoices(chat.name, lines, s.userName, s.tone, ReplyStyle.promptRules(chat, s))
+            else -> Prompts.draftReply(chat.name, lines, s.userName, s.tone, styleRules = ReplyStyle.promptRules(chat, s))
         }
         val holdSeed = (System.currentTimeMillis() / 60_000L).toInt() + chat.key.hashCode()
         // Auto: questions/requests aimed at the user are held by rule (no AI needed); otherwise the
         // model only chooses hold/reply, and a hold sends a holding message, never invented facts.
         val quick = if (sendAutomatically) pendingIncoming.lastOrNull()?.let { AutoReply.quickReply(it.text) } else null
+        var choices = emptyList<String>()
         val draft = if (sendAutomatically && pendingIncoming.any { AutoReply.mustHold(it.text) }) {
             AutoReply.holdingText(holdSeed)
         } else if (quick != null) {
@@ -146,9 +151,16 @@ class Automation(
         } else {
             val m = model ?: return
             val raw = llm.withLock { engine.complete(m, prompt, s.threads, s.contextSize) }
-            if (sendAutomatically) AutoReply.replyText(raw) ?: AutoReply.holdingText(holdSeed) else raw
+            when {
+                sendAutomatically -> AutoReply.replyText(raw) ?: AutoReply.holdingText(holdSeed)
+                withChoices -> {
+                    choices = ReplyChoices.parse(raw) { ReplyStyle.finish(it, chat, s) }
+                    choices.firstOrNull() ?: return
+                }
+                else -> raw
+            }
         }
-        val text = ReplyStyle.finish(draft, chat, s)
+        val text = if (choices.isNotEmpty()) choices.first() else ReplyStyle.finish(draft, chat, s)
         if (text.isBlank()) return
 
         // The user may have replied themselves while we were thinking.
@@ -159,7 +171,7 @@ class Automation(
         if (sendAutomatically) {
             scheduleAutoSend(chat, if (s.appendSignature) "$text\n— sent by my assistant" else text, s.autoSendDelaySec)
         } else {
-            HyNotifications.suggestion(context, chat.key, chat.name, incoming, text, holdReason)
+            HyNotifications.suggestion(context, chat.key, chat.name, incoming, choices.ifEmpty { listOf(text) }, holdReason)
             ActivityLog.add(if (holdReason != null) ActivityLog.Kind.HELD else ActivityLog.Kind.SUGGESTED, chat.name, text, holdReason)
         }
     }

@@ -21,6 +21,16 @@ import com.hy.assistant.agents.AgentRunner
 import com.hy.assistant.actions.PhoneActionRunner
 import com.hy.assistant.core.PhoneAction
 import com.hy.assistant.core.PhoneActions
+import com.hy.assistant.core.GpuBench
+import com.hy.assistant.core.PlanRequest
+import com.hy.assistant.core.Planner
+import com.hy.assistant.core.When
+import com.hy.assistant.planner.CalendarEvent
+import com.hy.assistant.planner.CalendarRepo
+import com.hy.assistant.planner.Reminders
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import com.hy.assistant.core.Export
 import com.hy.assistant.core.ExportFormat
 import com.hy.assistant.tools.FileSaver
@@ -486,6 +496,151 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (granted) runPhone(a) else _output.value = AssistantOutput("Contacts", "", false, error = "Without contacts access Hy can't find ${a.target}.")
     }
 
+    // ---- Reminders and calendar ------------------------------------------------------------------
+
+    val reminders = Reminders.items
+
+    fun removeReminder(id: Long) = Reminders.remove(id)
+
+    /** A calendar request waiting for the Calendar permission (the UI asks, then calls [retryPlan]). */
+    private val _needCalendar = MutableStateFlow<PlanRequest?>(null)
+    val needCalendar: StateFlow<PlanRequest?> = _needCalendar.asStateFlow()
+
+    /** "Remind me to buy milk" without a time: the next thing said ("at 6") completes it. */
+    private var reminderNeedingTime: String? = null
+
+    private fun politely(text: String) = if (butlerOn) "${Butler.done(addr())} $text" else text
+
+    fun runPlan(req: PlanRequest) {
+        val now = LocalDateTime.now()
+        val zone = ZoneId.systemDefault()
+        when (req) {
+            is PlanRequest.Remind -> {
+                if (!req.at.isAfter(now)) {
+                    _output.value = AssistantOutput("Reminder", "", false, error = "${When.describe(req.at, now).replaceFirstChar { it.uppercase() }} has already passed.")
+                    return
+                }
+                Reminders.add(req.text, req.at.atZone(zone).toInstant().toEpochMilli())
+                val note = if (!HyNotifications.canPost(app)) "\n(Turn on notifications for Hy so the reminder can show.)" else ""
+                _output.value = AssistantOutput("Reminder", politely("I'll remind you: ${req.text}, ${When.describe(req.at, now)}.") + note, false)
+            }
+            is PlanRequest.RemindNeedsTime -> {
+                reminderNeedingTime = req.text
+                _output.value = AssistantOutput("Reminder", "When should I remind you to ${req.text.replaceFirstChar { it.lowercase() }}? (e.g. \"at 6 pm\" or \"in 30 minutes\")", false)
+            }
+            PlanRequest.ListReminders -> {
+                val list = Reminders.items.value
+                val text = if (list.isEmpty()) "You have no reminders." else list.joinToString("\n") {
+                    "• ${it.text}: ${When.describe(LocalDateTime.ofInstant(Instant.ofEpochMilli(it.at), zone), now)}"
+                }
+                _output.value = AssistantOutput("Reminders", text, false)
+            }
+            is PlanRequest.Agenda, is PlanRequest.FreeAt, is PlanRequest.AddEvent, is PlanRequest.EventNeedsTime -> runCalendar(req, now)
+        }
+    }
+
+    private fun runCalendar(req: PlanRequest, now: LocalDateTime) {
+        if (req is PlanRequest.EventNeedsTime) {
+            _output.value = AssistantOutput("Calendar", "", false, error = "When is \"${req.title}\"? Try: add ${req.title.replaceFirstChar { it.lowercase() }} tomorrow at 4 pm to my calendar.")
+            return
+        }
+        if (!CalendarRepo.hasPermission(app)) {
+            _output.value = AssistantOutput("Calendar", "Hy needs access to your calendar for that.", running = false)
+            _needCalendar.value = req
+            return
+        }
+        viewModelScope.launch {
+            val out = withContext(Dispatchers.IO) {
+                runCatching {
+                    when (req) {
+                        is PlanRequest.Agenda -> agendaText(req.day.let { CalendarRepo.eventsOn(app, it) }, When.describeDay(req.day, now))
+                        is PlanRequest.FreeAt -> {
+                            val zone = ZoneId.systemDefault()
+                            val t = req.at.atZone(zone).toInstant().toEpochMilli()
+                            val busy = CalendarRepo.eventsBetween(app, t, t + 60_000).filter { !it.allDay }
+                            val whenText = When.describe(req.at, now)
+                            if (busy.isEmpty()) "Yes, you're free $whenText." else "No, $whenText you have " + busy.joinToString(" and ") {
+                                "${it.title} (${When.describeTime(it.start.toLocalTime())}–${When.describeTime(it.end.toLocalTime())})"
+                            } + "."
+                        }
+                        is PlanRequest.AddEvent -> {
+                            val cal = CalendarRepo.insert(app, req.title, req.start, req.minutes, req.allDay)
+                                ?: error("No calendar on this phone accepts new events. Add a Google account in Settings → Accounts.")
+                            val whenText = if (req.allDay) When.describeDay(req.start.toLocalDate(), now) else When.describe(req.start, now)
+                            politely("Added \"${req.title}\" $whenText to $cal.")
+                        }
+                        else -> ""
+                    }
+                }
+            }
+            out.onSuccess { _output.value = AssistantOutput("Calendar", it, false) }
+                .onFailure { _output.value = AssistantOutput("Calendar", "", false, error = it.message ?: "Calendar error") }
+        }
+    }
+
+    private fun agendaText(events: List<CalendarEvent>, day: String): String {
+        if (events.isEmpty()) return "Nothing on your calendar $day."
+        return "On your calendar $day:\n" + events.joinToString("\n") { e ->
+            val time = if (e.allDay) "All day" else When.describeTime(e.start.toLocalTime())
+            "• $time  ${e.title}" + if (e.location.isNotBlank()) " (${e.location})" else ""
+        }
+    }
+
+    /** Called after the Calendar permission dialog. */
+    fun retryPlan(granted: Boolean) {
+        val r = _needCalendar.value ?: return
+        _needCalendar.value = null
+        if (granted) runPlan(r) else _output.value = AssistantOutput("Calendar", "", false, error = "Without calendar access Hy can't read or add events.")
+    }
+
+    // ---- GPU (Models screen) --------------------------------------------------------------------
+
+    private val _gpuTest = MutableStateFlow<String?>(null)
+    val gpuTest: StateFlow<String?> = _gpuTest.asStateFlow()
+    val onGpu = engine.onGpu
+
+    /** Runs the same prompt on the CPU and the GPU; turns the GPU on only if it is faster and correct. */
+    fun runGpuTest() {
+        val model = models.activeModelFile() ?: run { _gpuTest.value = NO_MODEL; return }
+        val s = settings.current
+        viewModelScope.launch {
+            _gpuTest.value = "Testing CPU, then GPU… (the first GPU run prepares its kernels and can take a minute)"
+            try {
+                val r = engine.speedTest(model, s.threads, s.contextSize)
+                fun line(name: String, run: GpuBench.Run) =
+                    "• $name: reads %.0f tokens/s, writes %.1f tokens/s".format(run.promptPerSec, run.genPerSec)
+                val gpu = r.gpu
+                _gpuTest.value = when {
+                    r.gpuName.isEmpty() -> "No supported GPU found (Hy's GPU support needs a Qualcomm Adreno GPU). Staying on the CPU.\n" + line("CPU", r.cpu)
+                    gpu == null -> "${r.gpuName} found, but the model didn't load on it. Staying on the CPU.\n" + line("CPU", r.cpu)
+                    else -> {
+                        val verdict = when (r.verdict) {
+                            GpuBench.Verdict.FASTER -> {
+                                settings.update { it.copy(useGpu = true) }
+                                "GPU is faster: turned on. A typical reply now takes about %.1f s instead of %.1f s.".format(gpu.typicalJobSec(), r.cpu.typicalJobSec())
+                            }
+                            GpuBench.Verdict.NOT_FASTER -> {
+                                settings.update { it.copy(useGpu = false) }
+                                "GPU isn't faster than the CPU on this phone with this model: staying on the CPU."
+                            }
+                            else -> {
+                                settings.update { it.copy(useGpu = false) }
+                                "GPU gave a different answer than the CPU, so it may not be computing correctly: staying on the CPU."
+                            }
+                        }
+                        "${r.gpuName}\n" + line("CPU", r.cpu) + "\n" + line("GPU", gpu) + "\n\n" + verdict +
+                            "\n\nCPU said: ${r.cpu.text.take(120)}\nGPU said: ${gpu.text.take(120)}"
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                settings.update { it.copy(useGpu = false) }
+                _gpuTest.value = "GPU test failed (${e.message}). Staying on the CPU."
+            }
+        }
+    }
+
     // ---- Speed test (Models screen) -----------------------------------------------------------
 
     private val _speed = MutableStateFlow<String?>(null)
@@ -735,6 +890,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // "agent: …" or Agent mode → multi-step run.
         val agentGoal = Regex("""^(?:agent|/agent)[:\s]+(.+)$""", RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)
         if (agentGoal != null || _agentMode.value) return startAgent(agentGoal ?: text)
+        // Reminders and calendar ("remind me…", "what's my day", "am I free at 5", "add … to my calendar").
+        val now = LocalDateTime.now()
+        reminderNeedingTime?.let { what ->
+            reminderNeedingTime = null
+            val t = When.extract(text, now)
+            val at = When.resolve(t, now)
+            if (at != null && t.rest.split(' ').count { it.isNotBlank() } <= 2) return runPlan(PlanRequest.Remind(what, at))
+        }
+        Planner.parse(text, now)?.let { return runPlan(it) }
         // Phone actions: open apps / WhatsApp chats, SMS, calls, alarms, timers, maps, YouTube.
         PhoneActions.parse(text)?.let { return runPhone(it) }
         val names = chats.value.map { it.name }
