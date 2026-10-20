@@ -1,5 +1,20 @@
 package com.hy.assistant.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,11 +61,14 @@ import java.util.Date
 
 @Composable
 fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    // Nothing-style card: flat surface, hairline outline, generous radius; grows/shrinks smoothly.
     Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = modifier.fillMaxWidth().animateContentSize(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
-        Column(Modifier.padding(16.dp)) { content() }
+        Column(Modifier.padding(18.dp)) { content() }
     }
 }
 
@@ -207,27 +225,41 @@ fun SavedFileBar(file: SavedFile, onOpen: () -> Unit, onShare: () -> Unit, onDis
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** A chat in the list: avatar, name, last message, time and an animated unread badge. */
 @Composable
 fun ChatRow(chat: Chat, onClick: () -> Unit) {
     val unread = chat.unread.size
     val last = chat.messages.lastOrNull()
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Avatar(chat.name, unread = unread > 0)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (chat.isWhatsApp) chat.name else "${chat.name} · ${chat.appName}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = if (unread > 0) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                )
-                Text(timeLabel(chat.lastTimestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        chat.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = if (unread > 0) FontWeight.Bold else FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                    )
+                    if (!chat.isWhatsApp) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(chat.appName.uppercase(), style = DotLabel.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(timeLabel(chat.lastTimestamp), style = MaterialTheme.typography.labelSmall, color = if (unread > 0) NothingRed else MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     last?.let { (if (it.fromMe) "You: " else if (chat.isGroup) "${it.sender}: " else "") + it.text } ?: "",
@@ -236,13 +268,11 @@ fun ChatRow(chat: Chat, onClick: () -> Unit) {
                     maxLines = 1,
                     modifier = Modifier.weight(1f),
                 )
-                if (unread > 0) {
-                    Text(
-                        " $unread new",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                    )
+                AnimatedVisibility(unread > 0, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+                    Box(
+                        Modifier.padding(start = 8.dp).height(20.dp).widthIn(min = 20.dp).clip(CircleShape).background(NothingRed).padding(horizontal = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("$unread", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold) }
                 }
             }
         }

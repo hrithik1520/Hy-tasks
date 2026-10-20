@@ -17,6 +17,11 @@ import com.hy.assistant.core.Web
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -132,163 +137,144 @@ fun HomeScreen(
         }
     }
 
+    val listState = rememberLazyListState()
+    val working = pendingRequest != null || output?.running == true || agentRun?.running == true || proposal?.generating == true
+    val orbMode = when (voice) {
+        is MainViewModel.VoiceState.Listening -> OrbMode.LISTENING
+        MainViewModel.VoiceState.Thinking -> OrbMode.THINKING
+        is MainViewModel.VoiceState.Speaking -> OrbMode.SPEAKING
+        MainViewModel.VoiceState.Idle -> if (working) OrbMode.THINKING else OrbMode.IDLE
+    }
+    val (orbTitle, orbSubtitle) = when (val v = voice) {
+        is MainViewModel.VoiceState.Listening -> "Listening" to v.partial.ifBlank { "Go ahead, or say \"stop\"" }
+        MainViewModel.VoiceState.Thinking -> "Thinking" to ""
+        is MainViewModel.VoiceState.Speaking -> "Speaking" to v.text
+        MainViewModel.VoiceState.Idle -> if (working) "Working on it" to "" else
+            "Tap to talk" to (if (settings.wakeWordEnabled) "or say \"Hey Alfred\"" else "or type below")
+    }
+    val (aiLabel, aiDot, aiPulse) = when {
+        !hasModel -> Triple("No AI model", MaterialTheme.colorScheme.onSurfaceVariant, false)
+        engineState is EngineState.Failed -> Triple("AI error", MaterialTheme.colorScheme.error, false)
+        engineState is EngineState.Loading -> Triple("Loading AI", NothingRed, true)
+        engineState is EngineState.Busy -> Triple("Thinking", NothingRed, true)
+        else -> Triple("AI ready", MaterialTheme.colorScheme.onSurface, false)
+    }
+    val modeHint = when {
+        settings.replyMode == ReplyMode.AUTO ->
+            "Replies by itself" + (if (settings.autoSendDelaySec > 0) " after ${settings.autoSendDelaySec}s" else "") +
+                ". Never for codes, money, passwords or emergencies."
+        settings.proactiveSuggestions -> "Drafts a reply for each new message. Tap Send in the notification."
+        else -> "Drafts replies only when you ask."
+    }
+    val talk = { if (voice != MainViewModel.VoiceState.Idle) vm.stopVoice() else vm.requestVoice() }
+    // A new request: scroll up so the orb and the answer are in view.
+    LaunchedEffect(pendingRequest) { if (pendingRequest != null) listState.animateScrollToItem(0) }
+
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Hy Assistant") },
-                actions = {
-                    IconButton(onClick = openSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0), // the header handles the status bar
+        snackbarHost = { SnackbarHost(snackbar) },
+        bottomBar = {
+            InputBar(
+                value = command,
+                onValueChange = { command = it },
+                onSend = submit,
+                onMic = talk,
+                placeholder = when {
+                    agentMode -> "Give the agent a task…"
+                    turns.isEmpty() -> "Ask Alfred anything…"
+                    else -> "Ask a follow-up…"
                 },
+                listening = voice is MainViewModel.VoiceState.Listening,
             )
         },
-        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            state = listState,
+            modifier = Modifier.fillMaxSize().padding(padding).imePadding(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (!listenerEnabled) {
-                item {
-                    SectionCard {
-                        Text("Step 1 · Allow notification access", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Hy reads your notifications on this phone to summarize and reply. Nothing leaves the device.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Spacer(Modifier.padding(4.dp))
-                        Button(onClick = {
-                            context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                        }) { Text("Open settings") }
-                    }
-                }
+            item("header") {
+                HomeHeader(
+                    name = settings.userName,
+                    auto = settings.replyMode == ReplyMode.AUTO,
+                    onModeChange = { vm.setReplyMode(if (it) ReplyMode.AUTO else ReplyMode.MANUAL) },
+                    aiLabel = aiLabel, aiDot = aiDot, aiPulsing = aiPulse,
+                    modeHint = modeHint,
+                    onSettings = openSettings,
+                )
             }
-            if (!hasModel) {
-                item {
-                    SectionCard {
-                        Text("Step 2 · Get the on-device AI model", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "One-time ~1.1 GB download. Needed for suggestions and auto-replies.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Spacer(Modifier.padding(4.dp))
-                        Button(onClick = openModels) { Text("Choose model") }
-                    }
-                }
-            }
-            if (!canNotify && Build.VERSION.SDK_INT >= 33) {
-                item {
-                    SectionCard {
-                        Text("Allow Hy's notifications", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Needed to show suggested replies with a Send button, and auto-reply alerts.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Spacer(Modifier.padding(4.dp))
-                        Button(onClick = { notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }) { Text("Allow") }
-                    }
-                }
+            item("orb") {
+                OrbHero(
+                    mode = orbMode,
+                    level = (voice as? MainViewModel.VoiceState.Listening)?.level ?: 0f,
+                    title = orbTitle, subtitle = orbSubtitle, onClick = talk,
+                    compact = turns.isNotEmpty() || pendingRequest != null,
+                )
             }
 
-            if (listenerEnabled && !ignoringBattery) {
-                item {
-                    SectionCard {
-                        Text("Let Hy work while the phone sleeps", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Without this, Android may pause Hy when the screen is off, so replies can come late or not at all.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Spacer(Modifier.padding(4.dp))
-                        Button(onClick = {
-                            val request = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            try {
-                                context.startActivity(request)
-                            } catch (e: Exception) {
-                                context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                            }
-                        }) { Text("Allow") }
+            // ---- First-run steps ---------------------------------------------------------
+            if (!listenerEnabled) item("setup-listener") {
+                Box(Modifier.animateItem()) {
+                    SetupCard("Step 1", "Allow notification access", "Hy reads your notifications on this phone to summarize and reply. Nothing leaves the device.", "Open settings") {
+                        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     }
                 }
             }
-
-            // ---- Mode switch -----------------------------------------------------------
-            item {
-                SectionCard {
-                    Text("Reply mode", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.padding(4.dp))
-                    val modes = listOf(ReplyMode.MANUAL to "Manual", ReplyMode.AUTO to "Auto")
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        modes.forEachIndexed { i, (mode, label) ->
-                            SegmentedButton(
-                                selected = settings.replyMode == mode,
-                                onClick = { vm.setReplyMode(mode) },
-                                shape = SegmentedButtonDefaults.itemShape(index = i, count = modes.size),
-                            ) { Text(label) }
+            if (!hasModel) item("setup-model") {
+                Box(Modifier.animateItem()) {
+                    SetupCard("Step 2", "Get the on-device AI model", "One-time ~1.1 GB download. Needed for suggestions and auto-replies.", "Choose model", openModels)
+                }
+            }
+            if (!canNotify && Build.VERSION.SDK_INT >= 33) item("setup-notify") {
+                Box(Modifier.animateItem()) {
+                    SetupCard("Permission", "Allow Hy's notifications", "Needed to show suggested replies with a Send button, and auto-reply alerts.", "Allow") {
+                        notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+            }
+            if (listenerEnabled && !ignoringBattery) item("setup-battery") {
+                Box(Modifier.animateItem()) {
+                    SetupCard("Background", "Let Hy work while the phone sleeps", "Without this, Android may pause Hy when the screen is off, so replies can come late or not at all.", "Allow") {
+                        val request = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        try {
+                            context.startActivity(request)
+                        } catch (e: Exception) {
+                            context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                         }
                     }
-                    Spacer(Modifier.padding(4.dp))
-                    Text(
-                        if (settings.replyMode == ReplyMode.AUTO) {
-                            "Hy replies by itself ${if (settings.autoSendDelaySec > 0) "after ${settings.autoSendDelaySec}s (tap Cancel to stop)" else "immediately"}. " +
-                                "Never for OTPs, money, passwords or emergencies" +
-                                (if (!settings.autoReplyGroups) ", or group chats" else "") + " — those come to you as suggestions."
-                        } else if (settings.proactiveSuggestions) {
-                            "Hy drafts a reply for every new message and shows it as a notification. Tap Send — no need to open the app."
-                        } else {
-                            "Hy only drafts replies when you ask."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (hasModel) {
-                        val label = when (val s = engineState) {
-                            EngineState.Idle -> "AI ready · ${settings.activeModel}"
-                            is EngineState.Loading -> "Loading ${s.model}…"
-                            is EngineState.Ready -> "AI loaded · ${s.model}"
-                            is EngineState.Busy -> "Thinking · ${s.model}"
-                            is EngineState.Failed -> "AI error: ${s.message}"
-                        }
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (engineState is EngineState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
                 }
             }
 
-            if (voice != MainViewModel.VoiceState.Idle) item { VoiceBanner(voice, vm::stopVoice) }
-            shared?.let { sh -> item { SharedCard(sh, vm::askAboutShared, vm::dismissShared) } }
+            shared?.let { sh -> item("shared") { Box(Modifier.animateItem()) { SharedCard(sh, vm::askAboutShared, vm::dismissShared) } } }
 
-            // ---- Conversation with Hy ---------------------------------------------------
+            // ---- Conversation with Hy -------------------------------------------------------
             if (turns.isNotEmpty() || pendingRequest != null) {
-                item {
-                    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Conversation", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                        TextButton(onClick = vm::newChat) { Text("New chat") }
+                item("conv-header") {
+                    SectionHeader("Conversation") {
+                        TextButton(onClick = vm::newChat) { Text("New chat", color = NothingRed) }
                     }
                 }
                 val hidden = if (showAllTurns) 0 else (turns.size - 6).coerceAtLeast(0)
                 if (hidden > 0) {
-                    item { TextButton(onClick = { showAllTurns = true }) { Text("Show $hidden earlier") } }
+                    item("conv-more") { TextButton(onClick = { showAllTurns = true }) { Text("Show $hidden earlier") } }
                 }
                 turns.drop(hidden).forEachIndexed { i, t ->
                     val isLast = hidden + i == turns.lastIndex
                     item(key = "turn-${t.timestamp}-$i") {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Bubble(t.user, fromUser = true)
-                            Bubble(t.assistant, fromUser = false)
+                        Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ChatBubble(t.user, fromUser = true)
+                            ChatBubble(t.assistant, fromUser = false)
                             SaveRow { f -> vm.exportText(t.assistant, t.user, f) }
                             // Sources of the latest web answer stay tappable.
                             val links = if (isLast && threaded != null && threaded === output) output?.links.orEmpty() else emptyList()
                             links.forEach { link ->
                                 Text(
-                                    "• ${link.title} — ${Web.host(link.url)}",
+                                    "↗ ${link.title} · ${Web.host(link.url)}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = NothingRed,
                                     maxLines = 1,
                                     modifier = Modifier.clickable { vm.openInBrowser(link.url) }.padding(start = 8.dp, top = 2.dp),
                                 )
@@ -296,77 +282,62 @@ fun HomeScreen(
                         }
                     }
                 }
-                pendingRequest?.let { req -> item { Bubble(req, fromUser = true) } }
+                pendingRequest?.let { req ->
+                    item("conv-pending") {
+                        Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ChatBubble(req, fromUser = true)
+                            if (output == null || output?.running == true) TypingBubble()
+                        }
+                    }
+                }
             }
 
             agentRun?.let { r ->
-                item { AgentCard(r, vm.agents::approve, vm.agents::skip, vm::stopAgent, vm::closeAgent, vm::openSaved, vm::shareSaved) }
+                item("agent") { Box(Modifier.animateItem()) { AgentCard(r, vm.agents::approve, vm.agents::skip, vm::stopAgent, vm::closeAgent, vm::openSaved, vm::shareSaved) } }
             }
             savedFile?.let { f ->
-                item { SavedFileBar(f, { vm.openSaved(f) }, { vm.shareSaved(f) }, vm::dismissSaved) }
+                item("saved") { Box(Modifier.animateItem()) { SavedFileBar(f, { vm.openSaved(f) }, { vm.shareSaved(f) }, vm::dismissSaved) } }
             }
-            confirm?.let { c -> item { ConfirmCard(c, vm::confirmPending, vm::dismissConfirm) } }
-            disambiguation?.let { d -> item { DisambiguationCard(d, vm::chooseCandidate, vm::dismissDisambiguation) } }
+            confirm?.let { c -> item("confirm") { Box(Modifier.animateItem()) { ConfirmCard(c, vm::confirmPending, vm::dismissConfirm) } } }
+            disambiguation?.let { d -> item("which") { Box(Modifier.animateItem()) { DisambiguationCard(d, vm::chooseCandidate, vm::dismissDisambiguation) } } }
             proposal?.let { p ->
-                item { ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal) }
+                item("proposal") { Box(Modifier.animateItem()) { ProposalCard(p, vm::editProposal, vm::confirmSend, vm::copyAndOpenWhatsApp, vm::dismissProposal) } }
             }
             // A finished answer already appears in the conversation; only show the card while working.
             output?.takeIf { it !== threaded }?.let { o ->
-                item { OutputCard(o, vm::dismissOutput, onOpenLink = vm::openInBrowser, onSave = { f -> vm.exportText(o.text, o.title, f) }) }
-            }
-
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = command,
-                        onValueChange = { command = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = {
-                            Text(
-                                when {
-                                    agentMode -> "Give the agent a multi-step task…"
-                                    turns.isEmpty() -> "Ask or tell Hy anything…"
-                                    else -> "Ask a follow-up…"
-                                },
-                            )
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { submit() }),
-                    )
-                    IconButton(onClick = submit) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Run") }
-                    // Talk to Hy: a voice conversation (answers are spoken, follow-ups by voice).
-                    FilledTonalButton(onClick = vm::requestVoice, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("🎤") }
-                }
-            }
-            item {
-                Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-                    FilterChip(
-                        selected = agentMode,
-                        onClick = { vm.setAgentMode(!agentMode) },
-                        label = { Text(if (agentMode) "Agent mode on" else "Agent mode") },
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(onClick = { vm.runCommand("What did I miss?") }) { Text("What did I miss?") }
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(onClick = openBrowser) { Text("Browser") }
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(onClick = openTerminal) { Text("Terminal") }
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(onClick = openModels) { Text("Models") }
+                item("output") {
+                    Box(Modifier.animateItem()) {
+                        OutputCard(o, vm::dismissOutput, onOpenLink = vm::openInBrowser, onSave = { f -> vm.exportText(o.text, o.title, f) })
+                    }
                 }
             }
 
-            // ---- What Hy did on its own ----------------------------------------------
+            // ---- Quick actions -----------------------------------------------------------------
+            item("quick") {
+                Column {
+                    SectionHeader("Quick actions")
+                    Spacer(Modifier.height(8.dp))
+                    QuickActions(
+                        agentMode = agentMode,
+                        onCatchUp = { vm.runCommand("What did I miss?") },
+                        onAgent = { vm.setAgentMode(!agentMode) },
+                        onBrowser = openBrowser,
+                        onTerminal = openTerminal,
+                        onModels = openModels,
+                    )
+                }
+            }
+
+            // ---- What Hy did on its own ----------------------------------------------------------
             if (activity.isNotEmpty()) {
-                item { Header("Hy activity") }
-                items(activity.take(5)) { e -> ActivityRow(e) }
+                item("activity-header") { SectionHeader("Hy activity") }
+                items(activity.take(5), key = { "act-${it.time}-${it.chatName}" }) { e -> Box(Modifier.animateItem()) { ActivityLine(e) } }
             }
 
-            // ---- Chats -----------------------------------------------------------------
-            item { Header("Chats (last 3 days)") }
+            // ---- Chats ---------------------------------------------------------------------------
+            item("chats-header") { SectionHeader("Chats · last 3 days") }
             if (chats.isEmpty()) {
-                item {
+                item("chats-empty") {
                     Text(
                         if (listenerEnabled) "No messages yet. New chat notifications will show up here automatically."
                         else "Allow notification access to see messages.",
@@ -375,65 +346,24 @@ fun HomeScreen(
                     )
                 }
             }
-            items(chats, key = { "chat-" + it.key }) { chat -> ChatRow(chat) { openChat(chat.key) } }
+            items(chats, key = { "chat-" + it.key }) { chat -> Box(Modifier.animateItem()) { ChatRow(chat) { openChat(chat.key) } } }
 
-            // ---- Everything else -------------------------------------------------------
+            // ---- Everything else -----------------------------------------------------------------
             if (feed.isNotEmpty()) {
-                item { Header("Other notifications (24 h)") }
-                items(if (showAllFeed) feed else feed.take(6), key = { "feed-" + it.id }) { f ->
-                    SectionCard {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "${f.category.label} · ${f.appName}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(timeLabel(f.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (f.title.isNotBlank()) Text(f.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
-                        if (f.text.isNotBlank()) Text(f.text, style = MaterialTheme.typography.bodySmall, maxLines = 2)
-                    }
-                }
+                item("feed-header") { SectionHeader("Other notifications · 24 h") }
+                items(if (showAllFeed) feed else feed.take(6), key = { "feed-" + it.id }) { f -> Box(Modifier.animateItem()) { FeedLine(f) } }
                 if (feed.size > 6) {
-                    item {
+                    item("feed-more") {
                         TextButton(onClick = { showAllFeed = !showAllFeed }) {
-                            Text(if (showAllFeed) "Show less" else "Show all ${feed.size}")
+                            Text(if (showAllFeed) "Show less" else "Show all ${feed.size}", color = NothingRed)
                         }
                     }
                 }
             }
-            item { Spacer(Modifier.padding(8.dp)) }
         }
     }
 }
 
-/** What the voice conversation is doing right now, with Stop. */
-@Composable
-private fun VoiceBanner(state: MainViewModel.VoiceState, onStop: () -> Unit) {
-    SectionCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    when (state) {
-                        is MainViewModel.VoiceState.Listening -> "🎤 Listening…"
-                        MainViewModel.VoiceState.Thinking -> "💭 Thinking…"
-                        is MainViewModel.VoiceState.Speaking -> "🔊 Speaking"
-                        MainViewModel.VoiceState.Idle -> ""
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                val detail = when (state) {
-                    is MainViewModel.VoiceState.Listening -> state.partial.ifBlank { "Say something, or \"stop\"" }
-                    is MainViewModel.VoiceState.Speaking -> state.text
-                    else -> ""
-                }
-                if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodySmall, maxLines = 3, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = onStop) { Text("Stop") }
-        }
-    }
-}
 
 /** Text or a link shared to Hy from another app, with one-tap tasks. */
 @Composable
@@ -473,43 +403,5 @@ private fun SharedCard(sh: MainViewModel.Shared, onAsk: (String) -> Unit, onDism
     }
 }
 
-@Composable
-private fun Bubble(text: String, fromUser: Boolean) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start) {
-        SelectionContainer {
-            Text(
-                text,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .widthIn(max = 320.dp)
-                    .background(
-                        if (fromUser) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
-                        RoundedCornerShape(14.dp),
-                    )
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            )
-        }
-    }
-}
 
-@Composable
-private fun Header(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-}
 
-@Composable
-private fun ActivityRow(e: ActivityLog.Entry) {
-    val color = when (e.kind) {
-        ActivityLog.Kind.AUTO_SENT, ActivityLog.Kind.SENT -> MaterialTheme.colorScheme.primary
-        ActivityLog.Kind.FAILED -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Column(Modifier.fillMaxWidth()) {
-        Row {
-            Text("${e.kind.label} · ${e.chatName}", style = MaterialTheme.typography.labelMedium, color = color, modifier = Modifier.weight(1f), maxLines = 1)
-            Text(timeLabel(e.time), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Text(e.text, style = MaterialTheme.typography.bodySmall, maxLines = 2)
-        e.note?.let { Text("Reason: $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-    }
-}

@@ -28,7 +28,7 @@ class Listener(private val context: Context) {
     private var active: SpeechRecognizer? = null
 
     /** Returns the transcript, or null on silence / no match / error. [onPartial] gets live text. */
-    suspend fun listen(onPartial: (String) -> Unit): String? = suspendCancellableCoroutine { cont ->
+    suspend fun listen(onPartial: (String) -> Unit, onLevel: (Float) -> Unit = {}): String? = suspendCancellableCoroutine { cont ->
         val rec = if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
             SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
         } else {
@@ -44,7 +44,8 @@ class Listener(private val context: Context) {
         rec.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) = Unit
             override fun onBeginningOfSpeech() = Unit
-            override fun onRmsChanged(rmsdB: Float) = Unit
+            // Loudness for the orb animation: roughly -2 dB (silence) to 10 dB (speech) → 0..1.
+            override fun onRmsChanged(rmsdB: Float) = onLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f))
             override fun onBufferReceived(buffer: ByteArray?) = Unit
             override fun onEndOfSpeech() = Unit
             override fun onEvent(eventType: Int, params: Bundle?) = Unit

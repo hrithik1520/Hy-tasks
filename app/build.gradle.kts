@@ -65,6 +65,17 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.systemProperty("robolectric.graphicsMode", "NATIVE")
+                // Only writes images when asked: ./gradlew :app:testDebugUnitTest -Phy.renderUi
+                if (project.hasProperty("hy.renderUi")) it.systemProperty("roborazzi.test.record", "true")
+            }
+        }
+    }
+
     buildFeatures {
         compose = true
     }
@@ -99,5 +110,11 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     // Offline "Hey Alfred" wake word (Vosk + its JNA bridge; native libs are 16 KB-aligned).
     implementation("com.alphacephei:vosk-android:0.3.75")
+    // Design review renders of Compose UI on the JVM (Robolectric native graphics + Roborazzi).
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.76.0")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation("net.java.dev.jna:jna:5.19.1@aar")
 }

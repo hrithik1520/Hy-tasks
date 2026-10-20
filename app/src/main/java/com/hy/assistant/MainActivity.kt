@@ -8,6 +8,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -131,13 +139,24 @@ private fun App(vm: MainViewModel) {
     val challenge by GoogleWebSearcher.challenge.collectAsState()
     challenge?.let { wv -> CaptchaDialog(wv) }
 
+    // Screen changes slide like Nothing OS: deeper screens come in from the right, Home slides back.
+    AnimatedContent(
+        targetState = route,
+        transitionSpec = {
+            val forward = targetState != "home"
+            val dir = if (forward) 1 else -1
+            (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it * dir / 3 } + fadeIn(tween(240)))
+                .togetherWith(slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) { -it * dir / 4 } + fadeOut(tween(180)))
+        },
+        label = "screens",
+    ) { screen ->
     when {
-        route == "models" -> ModelsScreen(vm, snackbar, back)
-        route == "settings" -> SettingsScreen(vm, snackbar, back)
-        route == "browser" -> BrowserScreen(vm, snackbar, back)
-        route == "terminal" -> TerminalScreen(vm, snackbar, back)
-        route.startsWith("chat:") -> {
-            val key = route.removePrefix("chat:")
+        screen == "models" -> ModelsScreen(vm, snackbar, back)
+        screen == "settings" -> SettingsScreen(vm, snackbar, back)
+        screen == "browser" -> BrowserScreen(vm, snackbar, back)
+        screen == "terminal" -> TerminalScreen(vm, snackbar, back)
+        screen.startsWith("chat:") -> {
+            val key = screen.removePrefix("chat:")
             LaunchedEffect(key) { MessageStore.markRead(key) }
             ChatScreen(vm, key, snackbar, back)
         }
@@ -150,6 +169,7 @@ private fun App(vm: MainViewModel) {
             openBrowser = { route = "browser" },
             openTerminal = { route = "terminal" },
         )
+    }
     }
 }
 

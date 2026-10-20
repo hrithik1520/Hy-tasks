@@ -177,3 +177,5 @@ release; pushes without a bump are published as `<version>.<build>`.
 
 Signing: see [`signing/README.md`](signing/README.md). The sideload key is committed for
 convenience and must be replaced before any public/Play Store release.
+
+The dot-matrix display font is [Doto](https://github.com/oliverlalan/Doto) (SIL Open Font License 1.1, see `licenses/Doto-OFL.txt`).

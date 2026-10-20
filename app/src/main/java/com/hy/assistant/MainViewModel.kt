@@ -225,7 +225,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     sealed interface VoiceState {
         data object Idle : VoiceState
-        data class Listening(val partial: String) : VoiceState
+        data class Listening(val partial: String, val level: Float = 0f) : VoiceState
         data object Thinking : VoiceState
         data class Speaking(val text: String) : VoiceState
     }
@@ -310,7 +310,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         voiceJob?.cancel()
         voiceJob = viewModelScope.launch {
             _voice.value = VoiceState.Listening("")
-            val heard = listener.listen { _voice.value = VoiceState.Listening(it) }
+            val heard = listener.listen(
+                onPartial = { p -> _voice.value = VoiceState.Listening(p, (_voice.value as? VoiceState.Listening)?.level ?: 0f) },
+                onLevel = { l -> (_voice.value as? VoiceState.Listening)?.let { _voice.value = it.copy(level = l) } },
+            )
             if (heard == null) {
                 // Silence ends the conversation; a pending draft stays on screen for a tap.
                 endVoice()
