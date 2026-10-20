@@ -1,6 +1,7 @@
 package com.hy.assistant
 
 import android.content.Context
+import com.hy.assistant.core.Humanizer
 import com.hy.assistant.core.Tone
 import com.hy.assistant.tools.SearchEngine
 import com.hy.assistant.tools.TerminalBackend
@@ -50,6 +51,8 @@ data class SettingsData(
     val briefingHour: Int = 8,
     /** Accessibility: add messages from the open WhatsApp chat on screen to Hy's history. */
     val readWhatsAppScreen: Boolean = false,
+    /** Emojis in drafted replies: add one when it fits (default), match the chat, or none. */
+    val emojiMode: Humanizer.EmojiMode = Humanizer.EmojiMode.FITS,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -96,6 +99,7 @@ class Settings(context: Context) {
             briefingEnabled = prefs.getBoolean("briefingEnabled", d.briefingEnabled),
             briefingHour = prefs.getInt("briefingHour", d.briefingHour),
             readWhatsAppScreen = prefs.getBoolean("readWhatsAppScreen", d.readWhatsAppScreen),
+            emojiMode = runCatching { Humanizer.EmojiMode.valueOf(prefs.getString("emojiMode", d.emojiMode.name)!!) }.getOrDefault(d.emojiMode),
             searchEngine = runCatching { SearchEngine.valueOf(prefs.getString("searchEngine", d.searchEngine.name)!!) }.getOrDefault(d.searchEngine),
         )
     }
@@ -127,6 +131,7 @@ class Settings(context: Context) {
             .putBoolean("briefingEnabled", d.briefingEnabled)
             .putInt("briefingHour", d.briefingHour)
             .putBoolean("readWhatsAppScreen", d.readWhatsAppScreen)
+            .putString("emojiMode", d.emojiMode.name)
             .apply()
         _data.value = d
     }

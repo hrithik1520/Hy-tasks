@@ -22,8 +22,9 @@ object Humanizer {
         val endsWithPeriod: Boolean,
     ) {
         /** One line for the prompt so the model matches length and feel. */
-        fun promptHint(): String {
-            if (samples < 3) return ""
+        fun promptHint(emoji: EmojiMode = EmojiMode.MATCH): String {
+            if (emoji == EmojiMode.OFF) return " No emojis."
+            if (samples < 3) return if (emoji == EmojiMode.FITS) " One fitting emoji is fine." else ""
             val length = when {
                 avgWords <= 6 -> "very short (a few words)"
                 avgWords <= 14 -> "short (one sentence)"
@@ -31,7 +32,7 @@ object Humanizer {
             }
             return " Match how Me writes in this chat: $length" +
                 (if (mostlyLowercase) ", lowercase" else "") +
-                (if (usesEmoji) ", emojis are fine" else ", no emojis") + "."
+                (if (usesEmoji || emoji == EmojiMode.FITS) ", one fitting emoji is fine" else ", no emojis") + "."
         }
 
         companion object {
@@ -101,7 +102,43 @@ object Humanizer {
      * Cleans a drafted reply. [theyUseEmoji]: whether the other person uses emojis in this chat.
      * Formal tone keeps full forms and punctuation; casual/short get contractions and voice matching.
      */
-    fun apply(text: String, tone: Tone, style: Style = Style.NONE, theyUseEmoji: Boolean = true): String {
+    /** How drafted replies use emojis. */
+    enum class EmojiMode(val label: String) {
+        /** Add one fitting emoji when the reply's mood is clear (never in Formal tone). */
+        FITS("When it fits"),
+        /** Only if the user or the other person uses emojis in this chat. */
+        MATCH("Match my style"),
+        OFF("Off"),
+    }
+
+    // First match wins: the reply's mood → one emoji people commonly use for it on WhatsApp.
+    private val emojiRules: List<Pair<Regex, String>> = listOf(
+        Regex("""\b(happy (birthday|bday|anniversary)|congrat\w*|well done|proud of you|so happy for)\b""") to "🎉",
+        Regex("""\b(haha+|hehe+|lol|lmao|rofl|that's hilarious|so funny)\b""") to "😂",
+        Regex("""\b(good ?night|gn|sleep well|sweet dreams)\b""") to "🌙",
+        Regex("""\b(good ?morning|gm)\b""") to "☀️",
+        Regex("""\b(love you|miss you|love it|lots of love)\b""") to "❤️",
+        Regex("""\b(thank(s| you)?|thx|ty|grateful)\b""") to "😊",
+        Regex("""\b(sorry|my bad|apologies)\b""") to "😅",
+        Regex("""\b(busy|tied up|in the middle of|will (text|call|reply|get back)|get back to you)\b""") to "🙏",
+        Regex("""\b(see you|see ya|bye|talk (later|soon)|ttyl|catch you)\b""") to "👋",
+        Regex("""\b(awesome|amazing|great news|that's great|so cool|nice one|wow)\b""") to "😄",
+        Regex("""\b(ok|okay|sure|done|sounds good|no problem|no worries|alright|got it|will do|take your time)\b""") to "👍",
+    )
+
+    /** One emoji that fits the reply's mood, or null when nothing clearly fits. */
+    fun fittingEmoji(reply: String): String? {
+        val t = reply.lowercase()
+        return emojiRules.firstOrNull { (r, _) -> r.containsMatchIn(t) }?.second
+    }
+
+    fun apply(
+        text: String,
+        tone: Tone,
+        style: Style = Style.NONE,
+        theyUseEmoji: Boolean = true,
+        emoji: EmojiMode = EmojiMode.MATCH,
+    ): String {
         var s = text.trim()
         s = openers.replace(s, "")
         s = closerSentences.replace(s, "")
@@ -111,7 +148,11 @@ object Humanizer {
         for ((r, to) in swaps) s = r.replace(s) { m -> matchCase(m.value, to) }
         if (tone != Tone.FORMAL) for ((r, to) in contractions) s = r.replace(s) { m -> matchCase(m.value, to) }
         s = s.replace(Regex("""!{2,}"""), "!").replace(Regex("""\?{2,}"""), "?")
-        if (!style.usesEmoji && !theyUseEmoji && style.samples >= 3) s = stripEmoji(s)
+        when (emoji) {
+            EmojiMode.OFF -> s = stripEmoji(s)
+            EmojiMode.MATCH -> if (!style.usesEmoji && !theyUseEmoji && style.samples >= 3) s = stripEmoji(s)
+            EmojiMode.FITS -> if (tone == Tone.FORMAL) s = stripEmoji(s)
+        }
         s = s.replace(Regex("""\s+([,.!?])"""), "$1").replace(Regex(""",\s*,"""), ",")
             .replace(Regex("""^[,\s]+|[,\s]+$"""), "").replace(Regex("""\s{2,}"""), " ")
         if (tone != Tone.FORMAL && style.samples >= 3) {
@@ -121,7 +162,15 @@ object Humanizer {
             // People texting often skip the final full stop on a single sentence.
             if (!style.endsWithPeriod && s.endsWith('.') && !s.endsWith("..") && s.count { it == '.' } == 1) s = s.dropLast(1)
         }
-        return s.ifBlank { text.trim() }
+        s = s.ifBlank { text.trim() }
+        // Small models rarely add emojis themselves: add one that fits, at the end.
+        val wantsEmoji = tone != Tone.FORMAL && !hasEmoji(s) && when (emoji) {
+            EmojiMode.FITS -> true
+            EmojiMode.MATCH -> style.usesEmoji
+            EmojiMode.OFF -> false
+        }
+        if (wantsEmoji) fittingEmoji(s)?.let { e -> s = s.trimEnd() + " " + e }
+        return s
     }
 
     fun hasEmoji(s: String): Boolean = s.codePoints().anyMatch { isEmoji(it) }

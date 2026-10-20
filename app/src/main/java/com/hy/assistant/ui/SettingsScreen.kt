@@ -122,6 +122,19 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                     "Replies sound like you texting, not a chatbot: no \"Certainly!\" or \"I hope this helps\", no em dashes or fancy words, and matched to how you write in each chat (length, lowercase, emojis).",
                     s.humanizeReplies,
                 ) { v -> vm.settings.update { it.copy(humanizeReplies = v) } }
+                if (s.humanizeReplies) {
+                    Text("Emojis in replies", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        com.hy.assistant.core.Humanizer.EmojiMode.entries.forEach { m ->
+                            FilterChip(selected = s.emojiMode == m, onClick = { vm.settings.update { it.copy(emojiMode = m) } }, label = { Text(m.label) })
+                        }
+                    }
+                    Text(
+                        "\"When it fits\" adds one emoji that matches the reply (thanks 😊, congrats 🎉, ok 👍). Never in Formal tone.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 ToggleRow("Polish my replies with AI", "\"Reply to X saying …\" gets rewritten naturally. Off = sends your exact words.", s.polishReplies) { v ->
                     vm.settings.update { it.copy(polishReplies = v) }
                 }

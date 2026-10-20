@@ -61,4 +61,30 @@ class HumanizerTest {
     fun neverReturnsEmpty() {
         assertEquals("I hope this helps!", Humanizer.apply("I hope this helps!", Tone.CASUAL))
     }
+
+    @Test
+    fun emojiWhenItFits() {
+        val fits = Humanizer.EmojiMode.FITS
+        assertEquals("Thank you so much! 😊", Humanizer.apply("Thank you so much!", Tone.CASUAL, emoji = fits))
+        assertEquals("Congrats bro, so proud of you 🎉", Humanizer.apply("Congrats bro, so proud of you", Tone.CASUAL, emoji = fits))
+        assertEquals("Good night! 🌙", Humanizer.apply("Good night!", Tone.CASUAL, emoji = fits))
+        assertEquals("Bit busy right now, will text you soon 🙏", Humanizer.apply("Bit busy right now, will text you soon", Tone.CASUAL, emoji = fits))
+        assertEquals("No worries, take your time 👍", Humanizer.apply("No worries, take your time", Tone.CASUAL, emoji = fits))
+        // Nothing clearly fits → no emoji forced in.
+        assertEquals("The meeting is at 4", Humanizer.apply("The meeting is at 4", Tone.CASUAL, emoji = fits))
+        // Already has one → not doubled; formal → none.
+        assertEquals("Thanks 🙌", Humanizer.apply("Thanks 🙌", Tone.CASUAL, emoji = fits))
+        assertEquals("Thank you for the update.", Humanizer.apply("Thank you for the update. 😊", Tone.FORMAL, emoji = fits))
+    }
+
+    @Test
+    fun emojiOffAndMatch() {
+        assertEquals("Thanks a lot!", Humanizer.apply("Thanks a lot! 😊", Tone.CASUAL, emoji = Humanizer.EmojiMode.OFF))
+        // Match: added only when the user uses emojis in this chat.
+        val emojiUser = casual.copy(usesEmoji = true, mostlyLowercase = false)
+        assertEquals("Sounds good 👍", Humanizer.apply("Sounds good", Tone.CASUAL, emojiUser, emoji = Humanizer.EmojiMode.MATCH))
+        assertEquals("sounds good", Humanizer.apply("Sounds good", Tone.CASUAL, casual, theyUseEmoji = false, emoji = Humanizer.EmojiMode.MATCH))
+        assertTrue(Humanizer.Style.NONE.promptHint(Humanizer.EmojiMode.FITS).contains("emoji"))
+        assertEquals(" No emojis.", casual.promptHint(Humanizer.EmojiMode.OFF))
+    }
 }
