@@ -1,6 +1,7 @@
 package com.hy.assistant
 
 import android.content.Context
+import com.hy.assistant.core.Butler
 import com.hy.assistant.core.Humanizer
 import com.hy.assistant.core.Tone
 import com.hy.assistant.tools.SearchEngine
@@ -9,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
+
+enum class VoiceStyle(val label: String) { BUTLER("Butler (British)"), STANDARD("Standard"), CUSTOM("Chosen voice") }
 
 /** Global reply mode. */
 enum class ReplyMode { MANUAL, AUTO }
@@ -57,6 +60,13 @@ data class SettingsData(
     val speakAnswers: Boolean = true,
     /** Offline "Hey Alfred" listener (foreground service with a notification). */
     val wakeWordEnabled: Boolean = false,
+    /** Spoken voice: the British "Butler" voice, the phone's standard voice, or a specific installed voice. */
+    val voiceStyle: VoiceStyle = VoiceStyle.BUTLER,
+    /** Exact TTS voice name when [voiceStyle] is CUSTOM. */
+    val ttsVoice: String? = null,
+    /** Butler manner for Hy's own answers (never in messages sent to others). */
+    val butlerPersona: Boolean = true,
+    val addressAs: Butler.Address = Butler.Address.NAME,
 ) {
     fun modeFor(chatKey: String): ChatMode = chatModes[chatKey] ?: ChatMode.DEFAULT
 }
@@ -105,6 +115,10 @@ class Settings(context: Context) {
             readWhatsAppScreen = prefs.getBoolean("readWhatsAppScreen", d.readWhatsAppScreen),
             speakAnswers = prefs.getBoolean("speakAnswers", d.speakAnswers),
             wakeWordEnabled = prefs.getBoolean("wakeWordEnabled", d.wakeWordEnabled),
+            voiceStyle = runCatching { VoiceStyle.valueOf(prefs.getString("voiceStyle", d.voiceStyle.name)!!) }.getOrDefault(d.voiceStyle),
+            ttsVoice = prefs.getString("ttsVoice", null),
+            butlerPersona = prefs.getBoolean("butlerPersona", d.butlerPersona),
+            addressAs = runCatching { Butler.Address.valueOf(prefs.getString("addressAs", d.addressAs.name)!!) }.getOrDefault(d.addressAs),
             emojiMode = runCatching { Humanizer.EmojiMode.valueOf(prefs.getString("emojiMode", d.emojiMode.name)!!) }.getOrDefault(d.emojiMode),
             searchEngine = runCatching { SearchEngine.valueOf(prefs.getString("searchEngine", d.searchEngine.name)!!) }.getOrDefault(d.searchEngine),
         )
@@ -140,6 +154,10 @@ class Settings(context: Context) {
             .putString("emojiMode", d.emojiMode.name)
             .putBoolean("speakAnswers", d.speakAnswers)
             .putBoolean("wakeWordEnabled", d.wakeWordEnabled)
+            .putString("voiceStyle", d.voiceStyle.name)
+            .putString("ttsVoice", d.ttsVoice)
+            .putBoolean("butlerPersona", d.butlerPersona)
+            .putString("addressAs", d.addressAs.name)
             .apply()
         _data.value = d
     }

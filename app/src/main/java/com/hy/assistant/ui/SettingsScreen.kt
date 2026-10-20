@@ -25,6 +25,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -59,6 +63,8 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumeTick++ }
     val screenOn = remember(resumeTick) { com.hy.assistant.screen.HyScreenService.isEnabled(context) }
     var showDisclosure by remember { mutableStateOf(false) }
+    val voices by vm.voices.collectAsState()
+    var showVoices by remember { mutableStateOf(false) }
     val wakeModel by com.hy.assistant.voice.WakeModel.state.collectAsState()
     val wakeRunning by com.hy.assistant.voice.WakeWordService.running.collectAsState()
     var micGranted by remember(resumeTick) {
@@ -265,6 +271,66 @@ fun SettingsScreen(vm: MainViewModel, snackbar: SnackbarHostState, onBack: () ->
                 Text("Voice", style = MaterialTheme.typography.titleSmall)
                 ToggleRow("Speak answers", "Read answers aloud when you talk to Hy (🎤 on the home screen).", s.speakAnswers) { v ->
                     vm.settings.update { it.copy(speakAnswers = v) }
+                }
+                Text("Voice", style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.hy.assistant.VoiceStyle.entries.filter { it != com.hy.assistant.VoiceStyle.CUSTOM || s.ttsVoice != null }.forEach { st ->
+                        FilterChip(selected = s.voiceStyle == st, onClick = { vm.settings.update { it.copy(voiceStyle = st) } }, label = { Text(st.label) })
+                    }
+                }
+                Text(
+                    when (s.voiceStyle) {
+                        com.hy.assistant.VoiceStyle.BUTLER -> "A calm British voice, a little slower and deeper. Uses the best British English voice on your phone."
+                        com.hy.assistant.VoiceStyle.STANDARD -> "Your phone's normal English voice."
+                        com.hy.assistant.VoiceStyle.CUSTOM -> "Using ${s.ttsVoice}."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = vm::previewVoice) { Text("▶ Preview") }
+                    OutlinedButton(onClick = { showVoices = !showVoices; if (showVoices) vm.loadVoices() }) { Text(if (showVoices) "Hide voices" else "All voices") }
+                    TextButton(onClick = { runCatching { context.startActivity(com.hy.assistant.voice.Speaker.installVoicesIntent()) } }) { Text("Get more") }
+                }
+                if (showVoices) {
+                    if (voices.isEmpty()) Text("Loading voices… (if none appear, tap Get more)", style = MaterialTheme.typography.bodySmall)
+                    voices.forEach { v ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                vm.settings.update { it.copy(voiceStyle = com.hy.assistant.VoiceStyle.CUSTOM, ttsVoice = v.name) }
+                                vm.previewVoice()
+                            }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = s.voiceStyle == com.hy.assistant.VoiceStyle.CUSTOM && s.ttsVoice == v.name, onClick = null)
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(v.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                                Text(
+                                    v.locale + (if (v.offline) " · offline" else " · needs internet"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+                ToggleRow(
+                    "Butler manner",
+                    "Hy speaks to you like a courteous English butler (\"Very good. Shall I send it?\"). Only how Hy talks to you; your messages to others stay in your voice.",
+                    s.butlerPersona,
+                ) { v -> vm.settings.update { it.copy(butlerPersona = v) } }
+                if (s.butlerPersona) {
+                    Text("Address me as", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            com.hy.assistant.core.Butler.Address.NAME to s.userName.trim().split(' ').firstOrNull().orEmpty().ifBlank { "My name" },
+                            com.hy.assistant.core.Butler.Address.SIR to "Sir",
+                            com.hy.assistant.core.Butler.Address.MAAM to "Ma'am",
+                        ).forEach { (a, label) ->
+                            FilterChip(selected = s.addressAs == a, onClick = { vm.settings.update { it.copy(addressAs = a) } }, label = { Text(label) })
+                        }
+                    }
                 }
                 ToggleRow(
                     "Wake word: \"Hey Alfred\"",

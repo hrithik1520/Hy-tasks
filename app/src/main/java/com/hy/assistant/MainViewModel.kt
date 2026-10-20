@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.hy.assistant.core.Agent
 import com.hy.assistant.core.AgentAction
 import com.hy.assistant.core.ChatLine
+import com.hy.assistant.core.Butler
 import com.hy.assistant.core.Command
 import com.hy.assistant.core.SpeakText
 import com.hy.assistant.core.VoiceCommands
@@ -215,7 +216,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (p != null && !p.generating && voiceWaiting) {
                     voiceWaiting = false
                     awaiting = Await.PROPOSAL
-                    say("Reply to ${p.chatName}: ${p.text}. Should I send it?")
+                    say(if (butlerOn) Butler.askSend(addr(), p.chatName, p.text) else "Reply to ${p.chatName}: ${p.text}. Should I send it?")
                 }
             }
         }
@@ -257,7 +258,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             disambiguation.collect { d ->
                 if (d != null && voiceWaiting) {
                     voiceWaiting = false
-                    say("Which one: ${d.candidates.joinToString(", or ") { it.name }}?")
+                    d.candidates.joinToString(", or ") { it.name }.let { names -> say(if (butlerOn) Butler.which(names) else "Which one: $names?") }
                 }
             }
         }
@@ -329,19 +330,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val a = awaiting
                 awaiting = Await.NONE
                 if (a == Await.PROPOSAL) confirmSend() else confirmPending()
-                say(if (a == Await.PROPOSAL) "Sent." else "Done.")
+                say(
+                    when {
+                        a == Await.PROPOSAL && butlerOn -> Butler.sent(addr())
+                        a == Await.PROPOSAL -> "Sent."
+                        butlerOn -> Butler.done(addr())
+                        else -> "Done."
+                    },
+                )
             }
             VoiceReply.Cancel -> {
                 val a = awaiting
                 awaiting = Await.NONE
                 if (a == Await.PROPOSAL) dismissProposal() else dismissConfirm()
-                say("Okay, cancelled.")
+                say(if (butlerOn) Butler.cancelled(addr()) else "Okay, cancelled.")
             }
             is VoiceReply.Edit -> {
                 editProposal(r.newText)
-                say("Changed it to: ${r.newText}. Send it?")
+                say(if (butlerOn) Butler.changed(r.newText) else "Changed it to: ${r.newText}. Send it?")
             }
-            VoiceReply.EndConversation -> say("Okay.", thenListen = false)
+            VoiceReply.EndConversation -> say(if (butlerOn) Butler.goodbye(addr()) else "Okay.", thenListen = false)
             is VoiceReply.Request -> {
                 // "Which Rahul?" answered by voice.
                 _disambiguation.value?.let { d ->
@@ -359,10 +367,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Some commands only show a short message; don't stay "thinking" forever.
                 viewModelScope.launch {
                     kotlinx.coroutines.delay(120_000)
-                    if (voiceWaiting && _voice.value == VoiceState.Thinking) say("Sorry, that took too long.")
+                    if (voiceWaiting && _voice.value == VoiceState.Thinking) say(if (butlerOn) Butler.tooLong(addr()) else "Sorry, that took too long.")
                 }
             }
         }
+    }
+
+    private val butlerOn get() = settings.current.butlerPersona
+    private fun addr() = Butler.address(settings.current.addressAs, settings.current.userName)
+    /** Butler manner for Hy's own answers (never for drafts sent to other people). */
+    private fun persona(request: String) = if (butlerOn && Butler.appliesTo(request)) Butler.persona(addr()) else ""
+
+    /** Installed English voices, for the Settings picker. */
+    private val _voices = MutableStateFlow<List<Butler.VoiceInfo>>(emptyList())
+    val voices: StateFlow<List<Butler.VoiceInfo>> = _voices.asStateFlow()
+
+    fun loadVoices() {
+        viewModelScope.launch {
+            speakerCreated = true
+            _voices.value = speaker.englishVoices()
+        }
+    }
+
+    /** Plays a sample line with the current voice settings. */
+    fun previewVoice() {
+        viewModelScope.launch {
+            speakerCreated = true
+            val a = addr()
+            speaker.speak(
+                if (butlerOn) "${greetingWord()}${if (a.isBlank()) "" else ", $a"}. Shall I read your messages?" else "Hi! This is how I'll sound.",
+                settings.current,
+            )
+        }
+    }
+
+    private fun greetingWord() = when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
+        in 5..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        else -> "Good evening"
     }
 
     /** Speaks [text] (if enabled), then keeps the conversation going when appropriate. */
@@ -373,7 +415,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _voice.value = VoiceState.Speaking(spoken)
             if (settings.current.speakAnswers) {
                 speakerCreated = true
-                speaker.speak(spoken)
+                speaker.speak(spoken, settings.current)
             }
             if (thenListen && (conversation || awaiting != Await.NONE)) listenTurn() else endVoice()
         }
@@ -538,7 +580,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val ctx = "## ${if (sh.fromScreen) "Text on the user's screen" else "Shared"} ${if (sh.url != null) "web page: ${sh.url}" else "text"}" +
                 (sh.subject?.let { " ($it)" } ?: "") + "\n" + content.take(budget)
             // Shared content is untrusted: answer text only, no actions.
-            val text = streamToOutput(sh.label, Agent.answerPrompt(withFormatHint(task), ctx, settings.current.userName))
+            val text = streamToOutput(sh.label, Agent.answerPrompt(withFormatHint(task), ctx, settings.current.userName, persona = persona(task)))
             _output.value = AssistantOutput(sh.label, text, running = false)
             autoExport(task)
         }
@@ -852,7 +894,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val ctx = "## Chat: ${chat.name}\n" + Prompts.transcript(chat.messages.map { it.toChatLine() }, 3000)
-        runReadOnly(chat.name, Agent.answerPrompt(question, ctx, settings.current.userName))
+        runReadOnly(chat.name, Agent.answerPrompt(question, ctx, settings.current.userName, persona = persona(question)))
     }
 
     fun chooseCandidate(chat: Chat) {
@@ -981,7 +1023,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val allow = settings.current.webSearch
         val text = streamToOutput(title, Agent.answerPrompt(
                 request, context, settings.current.userName, allowSearch = allow,
-                history = history(if (big) 1500 else 600), memory = memory(),
+                history = history(if (big) 1500 else 600), memory = memory(), persona = persona(request),
             ))
         val query = if (allow) Agent.searchRequest(text) else null
         if (query != null) searchAndAnswer(request, query) else _output.value = AssistantOutput(title, text, running = false)
@@ -1001,7 +1043,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val links = outcome.results.take(3)
         _output.value = AssistantOutput(title, "Reading results…", running = true, links = links)
-        val answer = streamToOutput(title, Agent.searchAnswerPrompt(request, query, Web.formatResults(outcome.results, outcome.topText), history(if (big) 800 else 300)), links)
+        val answer = streamToOutput(title, Agent.searchAnswerPrompt(request, query, Web.formatResults(outcome.results, outcome.topText), history(if (big) 800 else 300), persona = persona(request)), links)
         _output.value = AssistantOutput(title, answer.removePrefix(Agent.SEARCH_PREFIX).trim(), running = false, links = links)
     }
 
@@ -1016,7 +1058,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val ctx = "## Web page: $url\n" + pageText.take(if (settings.current.contextSize >= 4096) 7000 else 3000)
         launchTask(Web.host(url)) {
             // Page text is untrusted: the model only produces text, no actions.
-            val text = streamToOutput(Web.host(url), Agent.answerPrompt(q, ctx, settings.current.userName))
+            val text = streamToOutput(Web.host(url), Agent.answerPrompt(q, ctx, settings.current.userName, persona = persona(q)))
             _output.value = AssistantOutput(Web.host(url), text, running = false)
         }
     }

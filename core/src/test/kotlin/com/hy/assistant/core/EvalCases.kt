@@ -102,6 +102,11 @@ class EvalCases {
         reply("c-news", "Rahul", listOf(ChatLine("Rahul", "bro i got the job!!", 1, false)), "congrat,awesome,great,amazing,proud,wow", "", kind = "reply")
         reply("c-traffic", "Priya", listOf(ChatLine("Priya", "stuck in traffic, will be 10 mins late", 1, false)), "no problem,no worries,ok,sure,take your time,np,sorry to hear,hope,drive safe", "sorry for the delay,i'm late,i'll be late,i'm running late", kind = "reply")
         reply("c-gm", "Dad", listOf(ChatLine("Dad", "good night beta, sleep well", 1, false)), "night,sleep", "", kind = "reply")
+        // --- Butler manner (Hy's own answers only; letters stay in the user's voice) ----------
+        out += Case("b-answer", "answer", Agent.answerPrompt("what can you do for me?", "", "Hrithik", persona = Butler.persona("sir")), emptyMap())
+        // Writing tasks get no persona (Butler.appliesTo), like the app does.
+        out += Case("b-letter", "answer", Agent.answerPrompt("write a short leave application to my manager for tomorrow", "", "Hrithik"), emptyMap())
+        out += Case("b-general", "answer", Agent.answerPrompt("what is the capital of France?", "", "Hrithik", persona = Butler.persona("sir")), emptyMap())
         return out
     }
 

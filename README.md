@@ -103,6 +103,11 @@ Updates: install the newer `HyAssistant.apk` over the old one. Your data and mod
 - **Voice**: tap 🎤 to talk to Hy. It answers out loud and keeps listening for follow-ups
   ("and tomorrow?", "send that to Priya") until you say "stop" or go quiet. Drafted replies are
   read out: say **"send"**, **"cancel"** or **"change it to …"**.
+- **Butler voice and manner** (Settings → Voice): a calm British voice, a little slower and
+  deeper, from your phone's installed voices, plus an optional courteous butler manner for how Hy
+  talks to you ("Very good, sir. It's been sent."). It's an original character, not modelled on any
+  real person. Letters and messages Hy writes for you stay in your own voice. You can pick any
+  installed voice and preview it.
 - **"Hey Alfred"** (optional wake word, also "What's up Alfred" / "Alfred"): listens offline on the
   phone with a small notification (40 MB voice model, downloaded once). It pauses during calls and
   opens Hy straight into a conversation, over the lock screen for questions.
