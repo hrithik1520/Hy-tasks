@@ -130,7 +130,7 @@ The app is called Hey-Alfred, but its folders keep the earlier internal name `hy
 
 | | |
 |---|---|
-| program | `~/.local/bin/hey-alfred` (and `hy`), app icons `~/.local/share/applications/hey-alfred*.desktop` |
+| program | `~/.local/bin/hey-alfred` (and `hy`), app icon `~/.local/share/applications/hey-alfred.desktop` |
 | settings | `~/.config/hy-desktop/config.json` (all optional; see the keys in `src/hy/config.py`) |
 | AI engine (colibri, pinned version) | `~/.local/share/hy-desktop/colibri` |
 | model (about 19 GB) | `~/colibri-models/qwen3-coder-30b` |

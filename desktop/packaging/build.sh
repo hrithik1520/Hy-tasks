@@ -11,7 +11,7 @@ rm -rf dist && mkdir -p "dist/$NAME"
 find src -name __pycache__ -prune -exec rm -rf {} +
 python3 -m zipapp src -o "dist/$NAME/hey-alfred" -p "/usr/bin/env python3" -m "hy.cli:main" -c
 cp src/hy/web/Doto-OFL.txt "dist/$NAME/Doto-OFL.txt"
-cp packaging/install.sh packaging/uninstall.sh packaging/hey-alfred.svg packaging/hey-alfred.desktop packaging/hey-alfred-terminal.desktop README.md version.txt "dist/$NAME/"
+cp packaging/install.sh packaging/uninstall.sh packaging/hey-alfred.svg packaging/hey-alfred.desktop README.md version.txt "dist/$NAME/"
 chmod +x "dist/$NAME/hey-alfred"
 # Reproducible tarball: fixed order and timestamps.
 tar --sort=name --mtime='2026-01-01 00:00:00' --owner=0 --group=0 --numeric-owner -C dist -czf "dist/$NAME.tar.gz" "$NAME"

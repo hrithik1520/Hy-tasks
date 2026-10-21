@@ -39,12 +39,10 @@ mkdir -p "$PREFIX/bin" "$APPS" "$ICONS"
 install -m 755 "$HERE/hey-alfred" "$PREFIX/bin/hey-alfred"
 ln -sf hey-alfred "$PREFIX/bin/hy"   # the short name
 install -m 644 "$HERE/hey-alfred.svg" "$ICONS/hey-alfred.svg"
-for f in hey-alfred hey-alfred-terminal; do
-  sed "s|@BIN@|$PREFIX/bin/hey-alfred|" "$HERE/$f.desktop" > "$APPS/$f.desktop"
-done
+sed "s|@BIN@|$PREFIX/bin/hey-alfred|" "$HERE/hey-alfred.desktop" > "$APPS/hey-alfred.desktop"
 command -v update-desktop-database >/dev/null && update-desktop-database "$APPS" 2>/dev/null || true
 echo "Installed $("$PREFIX/bin/hey-alfred" --version) to $PREFIX/bin/hey-alfred"
 case ":$PATH:" in *":$PREFIX/bin:"*) ;; *) echo "Note: $PREFIX/bin is not in your PATH. Add it, or log out and in again.";; esac
 echo
 echo "Next:  hey-alfred setup     (installs the AI engine and downloads the model, about 19 GB, once; skip if already done)"
-echo "Then:  open \"Hey-Alfred\" from your apps, or run  hey-alfred   (window)  or  hey-alfred chat   (terminal)"
+echo "Then:  open \"Hey-Alfred\" from your apps, or run  hey-alfred"
