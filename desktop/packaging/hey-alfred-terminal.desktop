@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Hey-Alfred (terminal)
+Comment=Private AI with terminal access, in a terminal
+Exec=@BIN@ chat
+Icon=hey-alfred
+Terminal=true
+Categories=Utility;ConsoleOnly;

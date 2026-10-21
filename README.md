@@ -4,6 +4,8 @@ An Android assistant for **WhatsApp** that runs an AI model **entirely on your p
 no account, no cloud, works offline after a one-time model download. Tuned for the
 **Nothing Phone (3a) Pro**, works on any arm64 Android 10+ phone with 6 GB+ RAM.
 
+**PC version: Hey-Alfred.** The same idea for your Linux PC, in the [`desktop/`](desktop/) folder: a private AI with its own window (and a terminal mode) that runs a 30B coding model on your computer and can use your terminal, with approval for anything that changes your machine. Download it from the [`desktop-v0.1.0` release](https://github.com/hrithik1520/Hy-tasks/releases/tag/desktop-v0.1.0); see [desktop/README.md](desktop/README.md).
+
 What it does:
 
 - **"What did I miss?"**: a one-line-per-chat catch-up of unread WhatsApp messages.

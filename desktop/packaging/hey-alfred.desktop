@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Hey-Alfred
+Comment=Private AI with terminal access, running on this PC
+Exec=@BIN@
+Icon=hey-alfred
+Terminal=false
+Categories=Utility;
+Keywords=AI;assistant;terminal;Alfred;
+StartupWMClass=HeyAlfred
